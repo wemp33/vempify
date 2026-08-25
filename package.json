@@ -1,0 +1,20 @@
+{
+  "name": "vempify",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "ingest": "node tools/ingest.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "music-metadata": "^11.15.0"
+  },
+  "type": "module"
+}
