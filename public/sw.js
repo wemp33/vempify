@@ -1,4 +1,8 @@
-const CACHE_NAME = 'vempify-shell-v2';
+/* Bumped to v3 with the traced logo: a device holding the v2 shell would keep
+   serving the old placeholder mark from cache. The activate handler below
+   deletes every other vempify-shell-* cache, so the bump is what actually
+   retires the stale icons. */
+const CACHE_NAME = 'vempify-shell-v3';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */
@@ -7,6 +11,7 @@ const SHELL_PATHS = [
   '/app.css',
   '/manifest.webmanifest',
   '/icons/icon.svg',
+  '/icons/icon-32.png',
   '/icons/icon-180.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

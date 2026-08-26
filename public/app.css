@@ -153,10 +153,38 @@ button {
   user-select: none;
 }
 
-.logo {
-  width: 26px;
-  height: 26px;
+/* The traced mark is black ink. Painted straight onto the dark chrome it
+   would be invisible, so it gets its own light purple tile - that tile is
+   what makes it legible. The mark is hard-edged and angular, so the corner
+   is a small chamfer: never a pill, never a circle.
+   login.html restates this block inline; keep the two in step. */
+.logo-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  background: #c4b5fd;
+  color: #000; /* the mark is fill="currentColor" */
+  border-radius: 5px;
+}
+
+/* Sized by WIDTH with the height following, because the mark is 298x258 -
+   wider than tall. Fixing both axes would either squash it or leave it
+   floating in a square box. 62% width leaves ~19% side padding and ~23%
+   top/bottom.
+   The nudge: the mark's ink centroid sits 20% of its own height ABOVE the
+   bounding-box centre (it is broad across the top and tapers to a single
+   point at the bottom), so a box-centred mark reads as sitting high. 6% -
+   roughly a third of that offset - settles it without dragging the point
+   toward the tile edge. Measured from the path, not guessed. */
+.logo-tile .logo {
   display: block;
+  width: 62%;
+  height: auto;
+  aspect-ratio: 298 / 258; /* Safari will not always infer this from the viewBox */
+  transform: translateY(6%);
 }
 
 .wordmark {
@@ -662,14 +690,19 @@ button {
 }
 
 .empty-state::before {
-  /* the V mark, masked so it picks up the accent gradient */
+  /* The real mark again, masked so it picks up the accent gradient instead of
+     a tile - this one sits on the dark ground as a watermark, not as branding.
+     The mask points at the traced file rather than an inlined copy of the path,
+     so there is exactly one place the geometry lives. Box is 298:258, matching
+     the mark, so `contain` has no slack to letterbox. */
   content: "";
-  width: 62px;
+  width: 72px;
   height: 62px;
+  flex-shrink: 0;
   opacity: 0.42;
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cg fill='none' stroke='%23000' stroke-width='46' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='61' y1='41' x2='256' y2='399'/%3E%3Cline x1='451' y1='41' x2='256' y2='399'/%3E%3C/g%3E%3Cpolygon points='256,370 205,461 307,461' fill='%23000'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cg fill='none' stroke='%23000' stroke-width='46' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='61' y1='41' x2='256' y2='399'/%3E%3Cline x1='451' y1='41' x2='256' y2='399'/%3E%3C/g%3E%3Cpolygon points='256,370 205,461 307,461' fill='%23000'/%3E%3C/svg%3E") center / contain no-repeat;
+  -webkit-mask: url("/icons/icon.svg") center / contain no-repeat;
+  mask: url("/icons/icon.svg") center / contain no-repeat;
 }
 
 /* =====================================================================
