@@ -1,0 +1,19 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Vempify">
+  <!-- Same geometry as tools/make-icons.mjs: strokes + foot, scaled 0.78 and
+       recentred on the mark's bounding box so nothing is clipped by the iOS
+       squircle mask. -->
+  <defs>
+    <linearGradient id="vempify-mark" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c084fc" />
+      <stop offset="1" stop-color="#8b5cf6" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="96" ry="96" fill="#0b0b0f" />
+  <g transform="translate(256 256) scale(0.78) translate(-256 -239.5)">
+    <g fill="none" stroke="url(#vempify-mark)" stroke-width="46" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="61" y1="41" x2="256" y2="399" />
+      <line x1="451" y1="41" x2="256" y2="399" />
+    </g>
+    <polygon points="256,370 205,461 307,461" fill="url(#vempify-mark)" />
+  </g>
+</svg>

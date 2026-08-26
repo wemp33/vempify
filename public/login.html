@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Vempify</title>
+  <meta name="theme-color" content="#0b0b0f" />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+  <!-- iOS refuses an SVG here; the raster from tools/make-icons.mjs is what it
+       will actually use. /icons/ is open to unauthenticated requests so this
+       resolves on the login page itself. -->
+  <link rel="apple-touch-icon" href="/icons/icon-180.png" sizes="180x180" />
+  <!-- Self-contained on purpose: app.css sits behind the gate, so this page
+       cannot depend on it. All styles are inline below. -->
+  <style>
+    :root {
+      --bg: #0b0b0f;
+      --surface: #16161d;
+      --surface-2: #1e1e27;
+      --border: #2a2a35;
+      --text: #f4f4f7;
+      --muted: #9b9baa;
+      --accent: #8b5cf6;
+      --accent-2: #c084fc;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      padding-top: max(24px, env(safe-area-inset-top));
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+      padding-left: max(24px, env(safe-area-inset-left));
+      padding-right: max(24px, env(safe-area-inset-right));
+    }
+
+    /* Soft violet wash behind the card so the page is not a flat rectangle. */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(60% 45% at 50% 0%, rgba(139, 92, 246, 0.16), transparent 70%),
+        radial-gradient(45% 35% at 50% 100%, rgba(192, 132, 252, 0.08), transparent 70%);
+    }
+
+    .card {
+      position: relative;
+      width: 100%;
+      max-width: 380px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 32px 26px 28px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .logo {
+      width: 30px;
+      height: 30px;
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+
+    .logo polygon {
+      fill: var(--accent);
+      stroke: none;
+    }
+
+    .wordmark {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .tagline {
+      margin: 0 0 24px;
+      text-align: center;
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+
+    .error {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+      padding: 11px 13px;
+      border-radius: 10px;
+      border: 1px solid rgba(248, 113, 113, 0.35);
+      background: rgba(248, 113, 113, 0.1);
+      color: #fca5a5;
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    .error[hidden] { display: none; }
+
+    .error svg {
+      width: 17px;
+      height: 17px;
+      flex-shrink: 0;
+      margin-top: 1px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .password-input {
+      width: 100%;
+      min-height: 48px;
+      padding: 12px 14px;
+      font-size: 1rem;
+      color: var(--text);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .password-input::placeholder { color: #6c6c7a; }
+
+    .password-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+    }
+
+    .submit-btn {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 16px;
+      padding: 12px 16px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #0b0b0f;
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+
+    .submit-btn:hover { background: var(--accent-2); }
+
+    .submit-btn:focus-visible {
+      outline: 2px solid var(--accent-2);
+      outline-offset: 2px;
+    }
+
+    .submit-btn:active { transform: translateY(1px); }
+
+    .note {
+      margin: 20px 0 0;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 100 100" role="img" aria-label="Vempify" xmlns="http://www.w3.org/2000/svg">
+        <line x1="12" y1="8" x2="50" y2="78" />
+        <line x1="88" y1="8" x2="50" y2="78" />
+        <polygon points="50,64 40,90 60,90" />
+      </svg>
+      <span class="wordmark">Vempify</span>
+    </div>
+
+    <p class="tagline">This library is private. Enter the password to continue.</p>
+
+    <div class="error" id="error" role="alert" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <line x1="12" y1="7.5" x2="12" y2="13" />
+        <line x1="12" y1="16.5" x2="12" y2="16.5" />
+      </svg>
+      <span>Wrong password. Please try again.</span>
+    </div>
+
+    <form method="post" action="/login">
+      <label class="field-label" for="password">Password</label>
+      <input
+        class="password-input"
+        id="password"
+        type="password"
+        name="password"
+        autocomplete="current-password"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+        placeholder="Password"
+        required
+        autofocus
+      />
+      <button class="submit-btn" type="submit">Unlock</button>
+    </form>
+
+    <p class="note">Vempify &mdash; your own music, your own server.</p>
+  </main>
+
+  <script>
+    // The page is served as a static file, so the ?error=1 flag from the failed
+    // POST redirect is read here rather than templated in.
+    if (new URLSearchParams(location.search).has('error')) {
+      document.getElementById('error').hidden = false;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "playlists": [
+    {
+      "name": "Smoke Test",
+      "tracks": [
+        { "title": "Test Tone A", "artist": "Fixture Artist", "album": "" },
+        { "title": "Test Tone B", "artist": "Fixture Artist", "album": "" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "playlists": [
+    {
+      "name": "My Music",
+      "tracks": [
+        { "title": "When the Sun Hits", "artist": "Slowdive" },
+        { "title": "Metropolis", "artist": "Disuu" }
+      ]
+    }
+  ]
+}

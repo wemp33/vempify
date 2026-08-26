@@ -1,0 +1,1336 @@
+/* =====================================================================
+   Vempify - dark UI
+   Palette is fixed by the project contract; everything else derives from it.
+   ===================================================================== */
+
+:root {
+  /* --- contract palette --- */
+  --bg: #0b0b0f;
+  --surface: #16161d;
+  --surface-2: #1e1e27;
+  --border: #2a2a35;
+  --text: #f4f4f7;
+  --muted: #9b9baa;
+  --accent: #8b5cf6;
+  --accent-2: #c084fc;
+
+  /* --- derived --- */
+  --surface-hover: #23232e;
+  --faint: #6b6b7b;
+  --on-accent: #17021f;
+  --accent-soft: rgba(139, 92, 246, 0.14);
+  --accent-glow: rgba(139, 92, 246, 0.28);
+
+  /* Aliases: earlier modules referenced these names. Keep them pointing at
+     the contract tokens so nothing renders un-themed. */
+  --bg-elevated: var(--surface);
+  --bg-elevated-2: var(--surface-2);
+  --bg-hover: var(--surface-hover);
+  --text-dim: var(--muted);
+  --text-faint: var(--faint);
+  --accent-hover: var(--accent-2);
+  --accent-text: var(--on-accent);
+
+  --sidebar-width: 244px;
+  --row-height: 56px;
+  --tap: 44px; /* iOS minimum tap target */
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --t-fast: 120ms var(--ease);
+  --t-med: 160ms var(--ease);
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 -8px 32px rgba(0, 0, 0, 0.5);
+
+  /* Safe areas, resolved once. max() keeps sane padding on devices with no
+     notch, where env() resolves to 0px. */
+  --safe-top: max(12px, env(safe-area-inset-top));
+  --safe-bottom: max(10px, env(safe-area-inset-bottom));
+  --safe-left: max(16px, env(safe-area-inset-left));
+  --safe-right: max(16px, env(safe-area-inset-right));
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* the shell owns scrolling, so the page cannot rubber-band */
+  overscroll-behavior: none;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+/* ---------- scrollbars (desktop) ---------- */
+
+.main::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.main::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  background-clip: content-box;
+  background-color: var(--surface-2);
+  border-radius: var(--radius-pill);
+}
+
+.main::-webkit-scrollbar-thumb:hover,
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border);
+}
+
+/* =====================================================================
+   Shell: header / (sidebar + main) / now-playing, no page scroll
+   ===================================================================== */
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* ---------- header ---------- */
+
+.app-header {
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px var(--safe-right) 10px var(--safe-left);
+  padding-top: var(--safe-top);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.logo {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+.wordmark {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* The box is capped here rather than on the input, so the absolutely
+   positioned icon always lines up with the field's left edge. The auto
+   margins centre it and still hold the lang toggle against the right. */
+.header-search {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  max-width: 460px;
+  margin: 0 auto;
+  display: flex;
+}
+
+.search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  color: var(--faint);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+  transition: color var(--t-med);
+}
+
+.header-search:focus-within .search-icon {
+  color: var(--accent-2);
+}
+
+.search-input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 14px 10px 38px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  /* 16px minimum, otherwise iOS zooms the viewport on focus. */
+  font-size: 16px;
+  outline: none;
+  transition: border-color var(--t-med), background var(--t-med), box-shadow var(--t-med);
+}
+
+.search-input::placeholder {
+  color: var(--faint);
+}
+
+.search-input:focus {
+  background: var(--bg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--faint);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3C/svg%3E") center / 12px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3C/svg%3E") center / 12px no-repeat;
+  cursor: pointer;
+}
+
+.lang-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: border-color var(--t-med), color var(--t-med), background var(--t-med);
+}
+
+/* ---------- sidebar + main ---------- */
+
+.layout {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  padding: 16px 10px 24px;
+  padding-left: max(10px, env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px var(--safe-right) 32px var(--safe-left);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background:
+    radial-gradient(900px 320px at 22% -8%, rgba(139, 92, 246, 0.11), transparent 70%),
+    var(--bg);
+}
+
+/* ---------- sidebar nav ---------- */
+
+.nav-section + .nav-section,
+.nav-list + .nav-section {
+  margin-top: 22px;
+}
+
+.nav-section__title {
+  padding: 6px 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+}
+
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.nav-item.is-active {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+.nav-item__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =====================================================================
+   Track list
+   ===================================================================== */
+
+.track-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.track-row {
+  position: relative;
+  /* index | artwork | title+artist | album | duration */
+  display: grid;
+  grid-template-columns: 26px 40px minmax(0, 1fr) minmax(0, 0.62fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--row-height);
+  padding: 8px 14px 8px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.track-row + .track-row::after {
+  /* hairline separator that stops short of the rounded corners */
+  content: "";
+  position: absolute;
+  left: 90px;
+  right: 14px;
+  top: 0;
+  height: 1px;
+  background: var(--border);
+}
+
+.track-row:active {
+  background: var(--surface-2);
+}
+
+.track-row.is-playing {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.22);
+}
+
+.track-row.is-playing::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 60%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+  transform: translateY(-50%);
+}
+
+.track-row.is-playing .track-row__title {
+  color: var(--accent-2);
+}
+
+/* index cell doubles as the play affordance */
+.track-row__index {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  color: var(--faint);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  transition: color var(--t-fast);
+}
+
+.track-row__index::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-left: 11px solid var(--accent);
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  opacity: 0;
+  transform: translate(-40%, -50%);
+  transition: opacity var(--t-fast);
+}
+
+.track-row.is-playing .track-row__index {
+  color: transparent;
+}
+
+.track-row.is-playing .track-row__index::after {
+  opacity: 1;
+}
+
+/* Artwork tile. The gradient/cover is painted inline by ui/nowplaying.js;
+   shape, clipping and the loading backdrop belong here. */
+.track-row__art,
+.now-playing-art {
+  overflow: hidden;
+  background-color: var(--surface-2);
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.track-row__art {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+}
+
+.artwork-img {
+  border-radius: inherit;
+}
+
+.track-row__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.track-row__title,
+.track-row__artist,
+.track-row__album {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-row__title {
+  font-size: 0.94rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.track-row__artist {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.track-row__album {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.track-row__duration {
+  color: var(--faint);
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* files the ingest step could not match to audio: present, not playable */
+.track-row.unmatched {
+  opacity: 0.45;
+}
+
+.track-row.unmatched .track-row__index::after {
+  display: none;
+}
+
+/* =====================================================================
+   Queue panel
+   ===================================================================== */
+
+.queue-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* li.queue-item holds four children: title, artist, and the two move
+   buttons ui/queue.js adds for touch. Grid keeps the text stacked in
+   column 1 with the buttons alongside. */
+.queue-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 2px;
+  min-height: var(--tap);
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background var(--t-fast);
+}
+
+.queue-item-title {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+}
+
+.queue-item-artist {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+}
+
+.queue-move {
+  grid-row: 1 / 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast), opacity var(--t-fast);
+}
+
+.queue-move--up {
+  grid-column: 2;
+}
+
+.queue-move--down {
+  grid-column: 3;
+}
+
+.queue-move:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.queue-move:active:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.queue-item.active {
+  background: var(--accent-soft);
+}
+
+.queue-item.active::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 55%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+.queue-item-title,
+.queue-item-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-item-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.queue-item.active .queue-item-title {
+  color: var(--accent-2);
+}
+
+.queue-item-artist {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* =====================================================================
+   Empty state
+   ===================================================================== */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 300px;
+  margin-top: 8px;
+  padding: 48px 24px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(600px 200px at 50% 0%, rgba(139, 92, 246, 0.08), transparent 70%);
+  color: var(--muted);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.empty-state::before {
+  /* the V mark, masked so it picks up the accent gradient */
+  content: "";
+  width: 62px;
+  height: 62px;
+  opacity: 0.42;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cg fill='none' stroke='%23000' stroke-width='46' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='61' y1='41' x2='256' y2='399'/%3E%3Cline x1='451' y1='41' x2='256' y2='399'/%3E%3C/g%3E%3Cpolygon points='256,370 205,461 307,461' fill='%23000'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cg fill='none' stroke='%23000' stroke-width='46' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='61' y1='41' x2='256' y2='399'/%3E%3Cline x1='451' y1='41' x2='256' y2='399'/%3E%3C/g%3E%3Cpolygon points='256,370 205,461 307,461' fill='%23000'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* =====================================================================
+   Now playing bar
+   ===================================================================== */
+
+.now-playing {
+  position: relative;
+  z-index: 30;
+  isolation: isolate;
+  /* clips the scaled-up ambient layer - without this its transformed box
+     adds horizontal scroll overflow to the page */
+  overflow: hidden;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Blurred, oversized copy of the current artwork. Another module sets
+   background-image on this element; everything else is fixed here. */
+.ambient-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0.65;
+  filter: blur(44px) saturate(190%);
+  transform: scale(1.9);
+  transition: opacity var(--t-med);
+  pointer-events: none;
+}
+
+/* Scrim: keeps text legible whatever colour the artwork throws off. */
+.now-playing-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(11, 11, 15, 0.66) 0%, rgba(11, 11, 15, 0.86) 100%),
+    radial-gradient(700px 120px at 50% 120%, rgba(139, 92, 246, 0.16), transparent 70%);
+  pointer-events: none;
+}
+
+.now-playing-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  padding: 10px var(--safe-right) 0 var(--safe-left);
+  padding-bottom: var(--safe-bottom);
+}
+
+.now-playing-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* A grid item's automatic minimum size is its min-content width, and a
+     long, nowrap title would otherwise widen the whole bar past the
+     viewport. Both declarations are needed. */
+  min-width: 0;
+  overflow: hidden;
+}
+
+.now-playing-art {
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--surface-2), var(--surface-hover));
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.now-playing-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.now-playing-title,
+.now-playing-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now-playing-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.now-playing-artist {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.now-playing-controls {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.transport-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.now-playing-volume {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+}
+
+/* ---------- buttons ---------- */
+
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--t-med), background var(--t-med), transform var(--t-fast);
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+.icon-btn[aria-pressed="true"] {
+  color: var(--accent-2);
+}
+
+/* toggle indicator: a dot for shuffle / repeat-all, a "1" for repeat-one */
+#shuffle-btn::after,
+#repeat-btn::after {
+  content: "";
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity var(--t-med);
+}
+
+#shuffle-btn[aria-pressed="true"]::after,
+#repeat-btn[aria-pressed="true"]::after {
+  opacity: 1;
+}
+
+#repeat-btn[data-mode="one"]::after {
+  content: "1";
+  width: auto;
+  height: auto;
+  bottom: 2px;
+  background: none;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.play-btn {
+  width: 52px;
+  height: 52px;
+  margin: 0 6px;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.play-btn:active {
+  transform: scale(0.94);
+}
+
+.play-btn .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.play-btn .icon-pause {
+  display: none;
+}
+
+.play-btn[aria-pressed="true"] .icon-play {
+  display: none;
+}
+
+.play-btn[aria-pressed="true"] .icon-pause {
+  display: block;
+}
+
+/* ---------- inline svg icons ---------- */
+
+.icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.icon .solid {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.icon-volume {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* =====================================================================
+   Range inputs (seek + volume)
+   ===================================================================== */
+
+.seek-row {
+  width: 100%;
+  max-width: 620px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+}
+
+.range-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  /* 44px tall for the tap target; negative margins keep the visual row slim */
+  height: var(--tap);
+  margin-block: -9px;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.range-input.volume {
+  width: 100px;
+  max-width: 100px;
+  flex-shrink: 0;
+}
+
+/* WebKit / Blink */
+.range-input::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    90deg,
+    var(--accent-2) 0%,
+    var(--accent) var(--range-fill, 0%),
+    var(--surface-2) var(--range-fill, 0%),
+    var(--surface-2) 100%
+  );
+}
+
+.range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4px; /* (track 6px - thumb 14px) / 2 */
+  border: none;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.6);
+  transition: transform var(--t-fast), background var(--t-fast);
+}
+
+.range-input:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+  background: var(--accent-2);
+}
+
+/* Firefox */
+.range-input::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: none;
+}
+
+.range-input::-moz-range-progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  border: none;
+}
+
+.range-input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.6);
+}
+
+.range-input:active::-moz-range-thumb {
+  background: var(--accent-2);
+}
+
+/* =====================================================================
+   Hover states - gated so iOS does not leave them stuck after a tap
+   ===================================================================== */
+
+@media (hover: hover) and (pointer: fine) {
+  .lang-toggle:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--accent-soft);
+  }
+
+  .nav-item:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .track-row:hover {
+    background: var(--surface);
+  }
+
+  .track-row:hover .track-row__index {
+    color: transparent;
+  }
+
+  .track-row:hover .track-row__index::after {
+    opacity: 1;
+  }
+
+  .track-row:hover .track-row__album,
+  .track-row:hover .track-row__duration {
+    color: var(--muted);
+  }
+
+  .queue-item:hover {
+    background: var(--surface-2);
+  }
+
+  /* Dragging works with a mouse, so the move buttons step out of the layout
+     here and the title gets the full width. They are only faded, never
+     display:none, so they still reveal for keyboard focus. */
+  .queue-move {
+    position: absolute;
+    top: 50%;
+    opacity: 0;
+    background: var(--surface-2);
+    transform: translateY(-50%);
+  }
+
+  .queue-move--up {
+    right: 48px;
+  }
+
+  .queue-move--down {
+    right: 4px;
+  }
+
+  .queue-item:hover .queue-move,
+  .queue-item:focus-within .queue-move {
+    opacity: 1;
+  }
+
+  .queue-move:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+
+  .icon-btn:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .icon-btn[aria-pressed="true"]:hover {
+    color: var(--accent-2);
+  }
+
+  .play-btn:hover {
+    background: var(--accent-2);
+    color: var(--on-accent);
+  }
+
+  .range-input:hover::-webkit-slider-thumb {
+    transform: scale(1.2);
+  }
+}
+
+/* =====================================================================
+   Narrow desktop / tablet: the queue drops below the track list, which
+   would otherwise be squeezed to a couple of words per row.
+   ===================================================================== */
+
+@media (max-width: 1000px) {
+  :root {
+    --sidebar-width: 210px;
+  }
+
+  /* main.js applies these as inline styles on #main and on the queue panel,
+     so !important is the only way to restack them. */
+  #main {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 20px !important;
+  }
+
+  #main > div + div {
+    width: 100% !important;
+    padding-left: 0 !important;
+    border-left: none !important;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* =====================================================================
+   Phone layout
+   ===================================================================== */
+
+@media (max-width: 760px) {
+  .app-header {
+    flex-wrap: wrap;
+    row-gap: 10px;
+    padding-bottom: 12px;
+  }
+
+  .header-search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  /* brand and lang toggle share row 1; keep the toggle on the right edge */
+  .lang-toggle {
+    margin-left: auto;
+  }
+
+  /* column-reverse puts the sidebar under the main list as a tab strip,
+     still above the now-playing bar. */
+  .layout {
+    flex-direction: column-reverse;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px var(--safe-right) 8px var(--safe-left);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    scrollbar-width: none;
+  }
+
+  .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  #sidebar .nav-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #sidebar .nav-section + .nav-section,
+  #sidebar .nav-list + .nav-section {
+    margin-top: 0;
+  }
+
+  /* the queue heading in <main> shares this class - only hide it in the nav */
+  #sidebar .nav-section__title {
+    display: none;
+  }
+
+  #sidebar .nav-list {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  #sidebar .nav-item {
+    min-height: var(--tap);
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  #sidebar .nav-item.is-active {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  #sidebar .nav-item.is-active::before {
+    display: none;
+  }
+
+  .main {
+    padding: 16px var(--safe-right) 24px var(--safe-left);
+  }
+
+  .track-row {
+    grid-template-columns: 22px 44px minmax(0, 1fr) auto;
+    gap: 12px;
+    min-height: 60px;
+    padding-right: 8px;
+  }
+
+  .track-row__art {
+    width: 44px;
+    height: 44px;
+  }
+
+  .track-row__album {
+    display: none;
+  }
+
+  .track-row + .track-row::after {
+    left: 78px;
+    right: 8px;
+  }
+
+  /* Two rows, five columns:
+       row 1  [ art + title/artist        ][ prev ][ play ][ next ]
+       row 2  [ shuffle ][ seek bar ................ ][ repeat ]
+     display:contents dissolves the two wrappers so every control can be
+     placed directly on this grid - which is what keeps the title readable
+     instead of squeezed into whatever the transport row leaves over. */
+  .now-playing-content {
+    /* col 1 is fixed, not auto: an auto column would absorb the min-content
+       width of the track title spanning into it and blow out the bar. */
+    grid-template-columns: var(--tap) minmax(0, 1fr) auto auto auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 0 6px;
+    padding-top: 8px;
+  }
+
+  .now-playing-controls,
+  .transport-buttons {
+    display: contents;
+  }
+
+  .now-playing-track {
+    grid-row: 1;
+    grid-column: 1 / 3;
+  }
+
+  #prev-btn {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  #play-pause {
+    grid-row: 1;
+    grid-column: 4;
+  }
+
+  #next-btn {
+    grid-row: 1;
+    grid-column: 5;
+  }
+
+  #shuffle-btn {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .seek-row {
+    grid-row: 2;
+    grid-column: 2 / 5;
+    max-width: none;
+    height: 22px;
+  }
+
+  #repeat-btn {
+    grid-row: 2;
+    grid-column: 5;
+  }
+
+  .now-playing-volume {
+    display: none; /* iOS ignores volume set from JS anyway - hardware keys own it */
+  }
+
+  .now-playing-art {
+    width: 46px;
+    height: 46px;
+  }
+
+  .play-btn {
+    width: 48px;
+    height: 48px;
+    margin: 0;
+  }
+
+  .empty-state {
+    min-height: 240px;
+    padding: 36px 20px;
+  }
+}
+
+/* Very narrow phones */
+@media (max-width: 360px) {
+  .wordmark {
+    display: none;
+  }
+
+  .now-playing-content {
+    gap: 0 4px;
+  }
+}
+
+/* Landscape phone: the bar would eat the whole screen otherwise */
+@media (max-height: 480px) and (orientation: landscape) {
+  .now-playing-art {
+    width: 40px;
+    height: 40px;
+  }
+
+  .app-header {
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-bottom: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

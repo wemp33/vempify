@@ -1,0 +1,34 @@
+# Do not delete this file, and do not "simplify" it away.
+#
+# Our .gitignore excludes media/ and public-data/library.json on purpose - the
+# audio is the user's own, and it does not belong in a public git repo. But
+# those are exactly the files the deployed app needs: without them Railway
+# ships a working player with an empty library and no audio at all.
+#
+# CONFIRMED IN PRACTICE (railway CLI v5.23.2): .railwayignore does NOT override
+# .gitignore just by existing - `railway up` applies .gitignore rules on top of
+# it regardless. The only thing that actually stops that is passing
+# --no-gitignore on every deploy:
+#
+#   railway up --no-gitignore
+#
+# Forgetting that flag silently deploys an empty library with no audio and no
+# error of any kind - it looks like a successful deploy. Verify after every
+# deploy with: curl <url>/api/library (after logging in) and confirm it is not
+# {"tracks":[],"playlists":[]}.
+#
+# This file's own listed patterns (build junk, sample fixtures) still apply
+# normally on top of that flag.
+
+node_modules
+.git
+.gitignore
+
+# Test fixtures - generated tones, not real library content.
+tools/sample
+
+# Local-only cruft.
+.env
+.DS_Store
+*.log
+npm-debug.log*
