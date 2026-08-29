@@ -1,10 +1,59 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { parseBuffer, parseFile } from 'music-metadata';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.flac', '.wav', '.ogg']);
+
+// Fragmented/DASH MP4s (the kind downloaders often emit, misnamed .mp3 or not)
+// play badly in Safari's <audio>: bogus lock-screen duration, slow start,
+// flaky seeking. A lossless `-c copy` remux to a plain faststart MP4 fixes all
+// three, so when ffmpeg is on PATH every ISO-BMFF file gets remuxed on the way
+// into media/ instead of copied. Without ffmpeg the copy still works - the
+// player has a duration fallback - so this stays optional.
+let ffmpegChecked = false;
+let ffmpegAvailable = false;
+
+function hasFfmpeg() {
+  if (!ffmpegChecked) {
+    ffmpegChecked = true;
+    try {
+      ffmpegAvailable = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
+    } catch {
+      ffmpegAvailable = false;
+    }
+  }
+  return ffmpegAvailable;
+}
+
+function isIsoBmff(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const head = Buffer.alloc(12);
+    fs.readSync(fd, head, 0, 12, 0);
+    fs.closeSync(fd);
+    return head.toString('ascii', 4, 8) === 'ftyp';
+  } catch {
+    return false;
+  }
+}
+
+function copyIntoMedia(srcPath, destPath, title) {
+  if (isIsoBmff(srcPath) && hasFfmpeg()) {
+    const result = spawnSync(
+      'ffmpeg',
+      ['-v', 'error', '-y', '-i', srcPath, '-c', 'copy', '-movflags', '+faststart', destPath],
+      { stdio: 'ignore' }
+    );
+    if (result.status === 0 && fs.existsSync(destPath) && fs.statSync(destPath).size > 0) {
+      return;
+    }
+    console.warn(`Warning: ffmpeg remux failed for ${title}; copying the original instead`);
+  }
+  fs.copyFileSync(srcPath, destPath);
+}
 
 function parseArgs(argv) {
   const args = { source: null, music: null, out: null, dryRun: false };
@@ -466,7 +515,7 @@ async function main() {
   for (const track of tracksById.values()) {
     if (track.matched) {
       const destPath = path.join(mediaDir, track.file);
-      fs.copyFileSync(track._sourceFilePath, destPath);
+      copyIntoMedia(track._sourceFilePath, destPath, track.title);
 
       if (track._picture) {
         const coverName = `${track.id}.${pictureExtension(track._picture)}`;

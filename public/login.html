@@ -6,6 +6,15 @@
   <title>Vempify</title>
   <meta name="theme-color" content="#0b0b0f" />
   <meta name="robots" content="noindex, nofollow" />
+  <!-- The gate redirects logged-out visitors here, so this is often the page
+       iOS actually reads during Add to Home Screen. Without the manifest and
+       the apple-* metas the install comes out as a plain bookmark that opens
+       with full Safari chrome instead of a standalone app. -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Vempify" />
   <!-- Same raster set as the app shell. iOS refuses an SVG for the home-screen
        icon anyway, and the bare mark is transparent, so both of these are the
        PNG tiles. /icons/ is open to unauthenticated requests, so they resolve

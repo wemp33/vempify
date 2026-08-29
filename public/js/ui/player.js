@@ -1,30 +1,30 @@
-const COVER_BASE = '/covers/';
 const GESTURE_EVENTS = ['pointerdown', 'touchend', 'keydown'];
 
-function coverMimeType(filename) {
-  const dot = filename.lastIndexOf('.');
-  const ext = dot >= 0 ? filename.slice(dot + 1).toLowerCase() : '';
-  if (ext === 'png') return 'image/png';
-  if (ext === 'webp') return 'image/webp';
-  if (ext === 'gif') return 'image/gif';
-  return 'image/jpeg';
-}
-
-function coverArtwork(track) {
-  const cover = track && typeof track.cover === 'string' ? track.cover.trim() : '';
-  if (!cover) return [];
-  return [
-    {
-      src: COVER_BASE + encodeURIComponent(cover),
-      sizes: '512x512',
-      type: coverMimeType(cover)
-    }
-  ];
-}
+// The lock screen / Dynamic Island always shows the app mark, never per-track
+// album art - the user's explicit preference. /icons/ bypasses the auth gate,
+// so iOS can fetch this without a session cookie.
+const LOGO_ARTWORK = [
+  { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }
+];
 
 export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) {
   const audio = new Audio();
-  audio.preload = 'metadata';
+  // 'auto' over 'metadata': the gap between tapping a row and hearing sound is
+  // mostly the element deciding to fetch; let it buffer eagerly.
+  audio.preload = 'auto';
+
+  let currentTrack = null;
+
+  // Safari reports Infinity (or garbage) for the duration of some containers,
+  // fragmented MP4 especially, and setPositionState throws on non-finite
+  // values - which left the lock-screen scrubber showing a bogus length. The
+  // library's own durationSec is the fallback truth.
+  function effectiveDuration() {
+    const d = audio.duration;
+    if (Number.isFinite(d) && d > 0) return d;
+    const fallback = currentTrack && Number(currentTrack.durationSec);
+    return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
+  }
 
   // While priming (see primeAudio) the element is deliberately muted and poked,
   // so its play/pause/timeupdate events describe nothing the UI should react to.
@@ -33,7 +33,11 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
 
   audio.addEventListener('timeupdate', () => {
     if (primingToken) return;
-    if (onTimeUpdate) onTimeUpdate(audio.currentTime, audio.duration || 0);
+    if (onTimeUpdate) onTimeUpdate(audio.currentTime, effectiveDuration());
+    updatePositionState();
+  });
+  audio.addEventListener('loadedmetadata', () => {
+    if (primingToken) return;
     updatePositionState();
   });
   audio.addEventListener('ended', () => {
@@ -43,6 +47,12 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
   audio.addEventListener('play', () => {
     if (primingToken) return;
     if (onPlayStateChange) onPlayStateChange(true);
+    // iOS tends to ignore action handlers registered before the media session
+    // first goes active, then falls back to its +/-15s seek buttons instead of
+    // the prev/next arrows. Re-registering on every real play is what makes
+    // the arrows stick.
+    registerMediaSessionHandlers();
+    updatePositionState();
   });
   audio.addEventListener('pause', () => {
     if (primingToken) return;
@@ -56,7 +66,7 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
         title: track.title || '',
         artist: track.artist || '',
         album: track.album || '',
-        artwork: coverArtwork(track)
+        artwork: LOGO_ARTWORK
       });
     } catch {
       /* MediaMetadata unsupported in this browser */
@@ -69,9 +79,9 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
     if (!('mediaSession' in navigator)) return;
     if (typeof navigator.mediaSession.setPositionState !== 'function') return;
 
-    const duration = audio.duration;
+    const duration = effectiveDuration();
     const position = audio.currentTime;
-    if (!Number.isFinite(duration) || duration <= 0) return;
+    if (duration <= 0) return;
     if (!Number.isFinite(position) || position < 0) return;
 
     const rate = Number.isFinite(audio.playbackRate) && audio.playbackRate > 0 ? audio.playbackRate : 1;
@@ -173,6 +183,15 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
         /* action unsupported in this browser */
       }
     }
+    // Explicitly unregister the interval-seek actions: when iOS sees these it
+    // shows +/-15s buttons on the lock screen instead of prev/next arrows.
+    for (const action of ['seekbackward', 'seekforward']) {
+      try {
+        navigator.mediaSession.setActionHandler(action, null);
+      } catch {
+        /* action unsupported in this browser */
+      }
+    }
   }
 
   // iOS rejects play() with NotAllowedError when it does not consider the call
@@ -197,8 +216,10 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
       removeGestureListeners();
       audio.muted = false;
 
+      currentTrack = track;
       audio.src = url;
       setMediaSessionMetadata(track);
+      registerMediaSessionHandlers();
       attemptPlayback();
     },
     pause() {
@@ -220,7 +241,7 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
       return audio.currentTime;
     },
     getDuration() {
-      return audio.duration || 0;
+      return effectiveDuration();
     }
   };
 
