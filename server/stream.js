@@ -63,12 +63,18 @@ router.get('/:id', async (req, res) => {
       return;
     }
 
+    // Replaying a song used to re-download it from scratch - the audible
+    // "second to load" on every tap. Track ids are stable and the file behind
+    // one practically never changes, so let the browser keep it.
+    const cacheControl = 'private, max-age=31536000, immutable';
+
     res.status(206);
     res.set({
       'Accept-Ranges': 'bytes',
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
       'Content-Length': end - start + 1,
       'Content-Type': contentType,
+      'Cache-Control': cacheControl,
     });
     createReadStream(filePath, { start, end }).pipe(res);
   } else {
@@ -77,6 +83,7 @@ router.get('/:id', async (req, res) => {
       'Accept-Ranges': 'bytes',
       'Content-Length': fileSize,
       'Content-Type': contentType,
+      'Cache-Control': 'private, max-age=31536000, immutable',
     });
     createReadStream(filePath).pipe(res);
   }

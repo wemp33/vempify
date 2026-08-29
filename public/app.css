@@ -71,7 +71,15 @@ html {
 body {
   height: 100%;
   margin: 0;
-  overflow: hidden; /* the shell owns scrolling, so the page cannot rubber-band */
+  /* iOS Safari ignores overflow:hidden on body for gesture scrolling - the
+     page still pans, dragging the header under the status bar. position:fixed
+     is the one thing it respects; the shell then owns all scrolling, and the
+     rubber-band "pushback" happens inside .main/.sidebar (their
+     overscroll-behavior: contain), never on the page itself. */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  overflow: hidden;
   overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);

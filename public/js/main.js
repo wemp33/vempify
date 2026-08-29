@@ -347,12 +347,34 @@ function handleQueueReorder(newOrderedIds) {
   store.setState({ queue: reordered, currentIndex: newIndex });
 }
 
+// A second, never-played element that quietly buffers the next queue entry
+// while the current one plays. Combined with the immutable Cache-Control on
+// /audio, the following track then starts from the local cache instead of a
+// fresh cross-continent fetch.
+const trackWarmer = new Audio();
+trackWarmer.preload = 'auto';
+trackWarmer.muted = true;
+
+function warmNextTrack(state) {
+  const next = state.queue[state.currentIndex + 1];
+  if (!next || !next.file) return;
+  const url = streamUrl(next.id);
+  if (trackWarmer.src && trackWarmer.src.endsWith(url)) return;
+  try {
+    trackWarmer.src = url;
+    trackWarmer.load();
+  } catch {
+    /* prefetch is best-effort */
+  }
+}
+
 function playCurrent() {
   const state = store.getState();
   const track = state.queue[state.currentIndex];
   if (!track || !track.file) return;
   player.play(track, streamUrl(track.id));
   incrementPlayCount(track.id, Date.now());
+  warmNextTrack(state);
 }
 
 function computeShuffledOrder(length, anchorIndex) {
