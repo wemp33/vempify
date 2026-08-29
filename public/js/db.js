@@ -1,5 +1,5 @@
 const DB_NAME = 'vempify-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -17,6 +17,9 @@ export function initDB() {
       }
       if (!db.objectStoreNames.contains('playcounts')) {
         db.createObjectStore('playcounts', { keyPath: 'trackId' });
+      }
+      if (!db.objectStoreNames.contains('userPlaylists')) {
+        db.createObjectStore('userPlaylists', { keyPath: 'name' });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -96,4 +99,67 @@ export function incrementPlayCount(trackId, nowMs) {
 
 export function getPlayCounts() {
   return getAll('playcounts');
+}
+
+export function getUserPlaylists() {
+  return getAll('userPlaylists').then((playlists) =>
+    playlists.sort((a, b) => a.createdAt - b.createdAt)
+  );
+}
+
+export function createUserPlaylist(name, nowMs) {
+  const record = { name, trackIds: [], createdAt: nowMs };
+  return initDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction('userPlaylists', 'readwrite');
+        const request = tx.objectStore('userPlaylists').add(record);
+        request.onerror = (event) => {
+          event.preventDefault();
+          const isTaken = request.error && request.error.name === 'ConstraintError';
+          reject(isTaken ? new Error('exists') : request.error);
+        };
+        tx.oncomplete = () => resolve(record);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      })
+  );
+}
+
+export function deleteUserPlaylist(name) {
+  return runTransaction('userPlaylists', 'readwrite', (store) => {
+    store.delete(name);
+  });
+}
+
+export function toggleTrackInUserPlaylist(name, trackId) {
+  return initDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction('userPlaylists', 'readwrite');
+        const store = tx.objectStore('userPlaylists');
+        const getRequest = store.get(name);
+        let isMember = false;
+        getRequest.onsuccess = () => {
+          const record = getRequest.result;
+          if (!record) {
+            reject(new Error('missing'));
+            tx.abort();
+            return;
+          }
+          const index = record.trackIds.indexOf(trackId);
+          if (index === -1) {
+            record.trackIds.push(trackId);
+            isMember = true;
+          } else {
+            record.trackIds.splice(index, 1);
+            isMember = false;
+          }
+          store.put(record);
+        };
+        tx.oncomplete = () => resolve(isMember);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      })
+  );
 }

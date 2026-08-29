@@ -1,13 +1,14 @@
 const state = {
   tracks: [],
-  playlists: [],
-  currentPlaylistName: null,
-  queue: [],
-  currentIndex: -1,
+  userPlaylists: [],
+  activePlaylist: null, // null = All songs, else playlist name
+  context: [], // array of track ids: the listening context playback flows through
+  contextIndex: -1, // position of the current song within context (-1 = nothing playing)
+  queue: [], // array of track ids the user queued via swipe
+  history: [], // recently played track ids, newest last, capped at 50
+  playMode: 'order', // 'order' | 'random'
   isPlaying: false,
   volume: 1,
-  shuffle: false,
-  repeat: 'off',
   lang: 'en',
 };
 

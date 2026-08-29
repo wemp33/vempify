@@ -2,7 +2,7 @@
    serving the old placeholder mark from cache. The activate handler below
    deletes every other vempify-shell-* cache, so the bump is what actually
    retires the stale icons. */
-const CACHE_NAME = 'vempify-shell-v5';
+const CACHE_NAME = 'vempify-shell-v6';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */
@@ -21,6 +21,8 @@ const SHELL_PATHS = [
   '/js/i18n.js',
   '/js/sources/local.js',
   '/js/ui/player.js',
+  '/js/ui/swipe.js',
+  '/js/ui/playlist-picker.js',
   '/js/ui/queue.js',
   '/js/ui/nowplaying.js',
   '/js/ui/search.js',

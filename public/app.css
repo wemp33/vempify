@@ -350,7 +350,8 @@ button {
   gap: 2px;
 }
 
-.nav-item {
+.nav-item,
+#sidebar .chip {
   position: relative;
   display: flex;
   align-items: center;
@@ -369,7 +370,8 @@ button {
   transition: background var(--t-fast), color var(--t-fast);
 }
 
-.nav-item.is-active {
+.nav-item.is-active,
+#sidebar .chip.is-active {
   background: var(--surface-2);
   color: var(--text);
   font-weight: 600;
@@ -408,25 +410,41 @@ button {
 
 .track-row {
   position: relative;
-  /* index | artwork | title+artist | album | duration */
+  /* play button | title+artist | duration - text only, no artwork */
   display: grid;
-  grid-template-columns: 26px 40px minmax(0, 1fr) minmax(0, 0.62fr) auto;
+  grid-template-columns: var(--tap) minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   min-height: var(--row-height);
-  padding: 8px 14px 8px 10px;
+  padding: 8px 14px 8px 6px;
   border-radius: var(--radius-md);
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
+  /* Swipe handlers claim horizontal gestures; vertical scrolling must stay
+     native, so the browser keeps pan-y and swipe.js never preventDefaults. */
+  touch-action: pan-y;
+  /* swipe.js drags the row with an inline translateX */
+  will-change: transform;
   transition: background var(--t-fast), color var(--t-fast);
+}
+
+/* Rows carry .pressable too; restate the list so the press transition does
+   not clobber the background fade (both rules set `transition`). */
+.track-row.pressable {
+  transition: transform 120ms ease, opacity 120ms ease, background-color var(--t-fast);
+}
+
+/* While swipe.js is driving the translate, nothing may ease it. */
+.track-row.is-dragging {
+  transition: none !important;
 }
 
 .track-row + .track-row::after {
   /* hairline separator that stops short of the rounded corners */
   content: "";
   position: absolute;
-  left: 90px;
+  left: 60px;
   right: 14px;
   top: 0;
   height: 1px;
@@ -459,61 +477,42 @@ button {
   color: var(--accent-2);
 }
 
-/* index cell doubles as the play affordance */
-.track-row__index {
-  position: relative;
-  display: flex;
+/* Visible play button on the row's left edge. Selector covers both the
+   BEM name and the bare "first button in the row" shape so the renderer
+   cannot miss the column. */
+.track-row__play,
+.track-row > button:first-child {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 34px;
-  color: var(--faint);
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-  transition: color var(--t-fast);
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast);
 }
 
-.track-row__index::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-left: 11px solid var(--accent);
-  border-top: 7px solid transparent;
-  border-bottom: 7px solid transparent;
-  opacity: 0;
-  transform: translate(-40%, -50%);
-  transition: opacity var(--t-fast);
+.track-row__play svg,
+.track-row > button:first-child svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  fill: currentColor;
+  pointer-events: none;
 }
 
-.track-row.is-playing .track-row__index {
-  color: transparent;
+.track-row__play:active,
+.track-row > button:first-child:active {
+  color: var(--text);
 }
 
-.track-row.is-playing .track-row__index::after {
-  opacity: 1;
-}
-
-/* Artwork tile. The gradient/cover is painted inline by ui/nowplaying.js;
-   shape, clipping and the loading backdrop belong here. */
-.track-row__art,
-.now-playing-art {
-  overflow: hidden;
-  background-color: var(--surface-2);
-  background-size: cover;
-  background-position: center;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-
-.track-row__art {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-}
-
-.artwork-img {
-  border-radius: inherit;
+.track-row.is-playing .track-row__play,
+.track-row.is-playing > button:first-child {
+  color: var(--accent-2);
 }
 
 .track-row__main {
@@ -524,8 +523,7 @@ button {
 }
 
 .track-row__title,
-.track-row__artist,
-.track-row__album {
+.track-row__artist {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -542,11 +540,6 @@ button {
   color: var(--muted);
 }
 
-.track-row__album {
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-
 .track-row__duration {
   color: var(--faint);
   font-size: 0.84rem;
@@ -557,10 +550,6 @@ button {
 /* files the ingest step could not match to audio: present, not playable */
 .track-row.unmatched {
   opacity: 0.45;
-}
-
-.track-row.unmatched .track-row__index::after {
-  display: none;
 }
 
 /* =====================================================================
@@ -576,18 +565,17 @@ button {
   gap: 2px;
 }
 
-/* li.queue-item holds four children: title, artist, and the two move
-   buttons ui/queue.js adds for touch. Grid keeps the text stacked in
-   column 1 with the buttons alongside. */
+/* li.queue-item in the queue modal: stacked title/artist in column 1,
+   then move-up, move-down and remove buttons alongside (44px targets). */
 .queue-item {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   grid-template-rows: auto auto;
   align-items: center;
   column-gap: 2px;
   min-height: var(--tap);
-  padding: 6px 6px 6px 12px;
+  padding: 6px 2px 6px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   -webkit-user-select: none;
@@ -607,11 +595,14 @@ button {
   align-self: start;
 }
 
-.queue-move {
+.queue-move,
+.queue-remove {
   grid-row: 1 / 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
   padding: 0;
   background: transparent;
   border: none;
@@ -629,12 +620,17 @@ button {
   grid-column: 3;
 }
 
+.queue-remove {
+  grid-column: 4;
+}
+
 .queue-move:disabled {
   opacity: 0.25;
   cursor: default;
 }
 
-.queue-move:active:not(:disabled) {
+.queue-move:active:not(:disabled),
+.queue-remove:active {
   background: var(--surface-hover);
   color: var(--text);
 }
@@ -720,42 +716,12 @@ button {
 .now-playing {
   position: relative;
   z-index: 30;
-  isolation: isolate;
-  /* clips the scaled-up ambient layer - without this its transformed box
-     adds horizontal scroll overflow to the page */
   overflow: hidden;
   background: var(--surface);
   border-top: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
   -webkit-user-select: none;
   user-select: none;
-}
-
-/* Blurred, oversized copy of the current artwork. Another module sets
-   background-image on this element; everything else is fixed here. */
-.ambient-bg {
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-  opacity: 0.65;
-  filter: blur(44px) saturate(190%);
-  transform: scale(1.9);
-  transition: opacity var(--t-med);
-  pointer-events: none;
-}
-
-/* Scrim: keeps text legible whatever colour the artwork throws off. */
-.now-playing-scrim {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(180deg, rgba(11, 11, 15, 0.66) 0%, rgba(11, 11, 15, 0.86) 100%),
-    radial-gradient(700px 120px at 50% 120%, rgba(139, 92, 246, 0.16), transparent 70%);
-  pointer-events: none;
 }
 
 .now-playing-content {
@@ -776,17 +742,6 @@ button {
      viewport. Both declarations are needed. */
   min-width: 0;
   overflow: hidden;
-}
-
-.now-playing-art {
-  width: 54px;
-  height: 54px;
-  flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--surface-2), var(--surface-hover));
-  background-size: cover;
-  background-position: center;
-  box-shadow: var(--shadow-sm);
 }
 
 .now-playing-meta {
@@ -862,9 +817,8 @@ button {
   color: var(--accent-2);
 }
 
-/* toggle indicator: a dot for shuffle / repeat-all, a "1" for repeat-one */
-#shuffle-btn::after,
-#repeat-btn::after {
+/* Play-mode toggle: the dot lights up in random mode (class is-active). */
+#shuffle-btn::after {
   content: "";
   position: absolute;
   bottom: 5px;
@@ -878,20 +832,14 @@ button {
   transition: opacity var(--t-med);
 }
 
-#shuffle-btn[aria-pressed="true"]::after,
-#repeat-btn[aria-pressed="true"]::after {
-  opacity: 1;
+#shuffle-btn.is-active,
+#shuffle-btn[aria-pressed="true"] {
+  color: var(--accent-2);
 }
 
-#repeat-btn[data-mode="one"]::after {
-  content: "1";
-  width: auto;
-  height: auto;
-  bottom: 2px;
-  background: none;
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1;
+#shuffle-btn.is-active::after,
+#shuffle-btn[aria-pressed="true"]::after {
+  opacity: 1;
 }
 
 .play-btn {
@@ -1041,6 +989,312 @@ button {
 }
 
 /* =====================================================================
+   Press feedback - gentle, Spotify-like, everywhere
+   ===================================================================== */
+
+.pressable {
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.pressable:active {
+  transform: scale(0.96);
+  opacity: 0.85;
+}
+
+/* The nav/chip rule (and its #sidebar-boosted phone variant) sets its own
+   transition list, which would clobber .pressable's transform/opacity pair.
+   Restate the full list at matching-or-higher specificity so chips get the
+   press feedback AND keep their background/color fade. */
+.nav-item.pressable,
+#sidebar .chip.pressable {
+  transition: transform 120ms ease, opacity 120ms ease, background var(--t-fast), color var(--t-fast);
+}
+
+/* The hidden attribute must always win, whatever display a class sets. */
+[hidden] {
+  display: none !important;
+}
+
+/* =====================================================================
+   Queue header button + count badge
+   ===================================================================== */
+
+.queue-btn {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.queue-btn .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.queue-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* =====================================================================
+   Modal layer (#modal-root is a sibling of .app-shell, so blurring the
+   shell can never soften the modal itself)
+   ===================================================================== */
+
+.app-shell {
+  transition: filter var(--t-med);
+}
+
+.app-shell.is-blurred {
+  filter: blur(8px);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-card {
+  width: 88vw;
+  max-width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.modal-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.modal-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin: -6px -10px -6px 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.modal-close:active {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+/* short muted line: "queue is empty", "add a playlist first", errors */
+.modal-hint {
+  padding: 16px 6px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+/* ---------- modal form controls (new-playlist dialog) ---------- */
+
+.modal-card input[type="text"],
+.modal-input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 14px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  /* 16px minimum, otherwise iOS zooms the viewport on focus */
+  font-size: 16px;
+  outline: none;
+  transition: border-color var(--t-med), box-shadow var(--t-med);
+}
+
+.modal-card input[type="text"]:focus,
+.modal-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.modal-actions button {
+  min-height: var(--tap);
+  padding: 0 18px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modal-actions button.primary,
+.modal-actions .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* =====================================================================
+   Playlist picker rows + membership check circles
+   ===================================================================== */
+
+.picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px 4px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-check {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+  color: transparent;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+
+.playlist-check svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.playlist-check.is-checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* =====================================================================
+   Toast ("added to queue")
+   ===================================================================== */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(104px + var(--safe-bottom));
+  z-index: 90;
+  transform: translateX(-50%);
+  max-width: 82vw;
+  padding: 10px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 400ms var(--ease), transform 400ms var(--ease);
+}
+
+.toast.is-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(6px);
+}
+
+/* =====================================================================
    Hover states - gated so iOS does not leave them stuck after a tap
    ===================================================================== */
 
@@ -1051,7 +1305,8 @@ button {
     background: var(--accent-soft);
   }
 
-  .nav-item:hover {
+  .nav-item:hover,
+  #sidebar .chip:hover {
     background: var(--surface-hover);
     color: var(--text);
   }
@@ -1060,49 +1315,37 @@ button {
     background: var(--surface);
   }
 
-  .track-row:hover .track-row__index {
-    color: transparent;
-  }
-
-  .track-row:hover .track-row__index::after {
-    opacity: 1;
-  }
-
-  .track-row:hover .track-row__album,
   .track-row:hover .track-row__duration {
     color: var(--muted);
+  }
+
+  .track-row:hover .track-row__play,
+  .track-row:hover > button:first-child {
+    color: var(--text);
   }
 
   .queue-item:hover {
     background: var(--surface-2);
   }
 
-  /* Dragging works with a mouse, so the move buttons step out of the layout
-     here and the title gets the full width. They are only faded, never
-     display:none, so they still reveal for keyboard focus. */
-  .queue-move {
-    position: absolute;
-    top: 50%;
-    opacity: 0;
-    background: var(--surface-2);
-    transform: translateY(-50%);
-  }
-
-  .queue-move--up {
-    right: 48px;
-  }
-
-  .queue-move--down {
-    right: 4px;
-  }
-
-  .queue-item:hover .queue-move,
-  .queue-item:focus-within .queue-move {
-    opacity: 1;
-  }
-
-  .queue-move:hover:not(:disabled) {
+  .queue-move:hover:not(:disabled),
+  .queue-remove:hover {
     color: var(--text);
+    background: var(--surface-hover);
+  }
+
+  .queue-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--accent-soft);
+  }
+
+  .modal-close:hover {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+
+  .picker-row:hover {
     background: var(--surface-hover);
   }
 
@@ -1126,29 +1369,12 @@ button {
 }
 
 /* =====================================================================
-   Narrow desktop / tablet: the queue drops below the track list, which
-   would otherwise be squeezed to a couple of words per row.
+   Narrow desktop / tablet
    ===================================================================== */
 
 @media (max-width: 1000px) {
   :root {
     --sidebar-width: 210px;
-  }
-
-  /* main.js applies these as inline styles on #main and on the queue panel,
-     so !important is the only way to restack them. */
-  #main {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 20px !important;
-  }
-
-  #main > div + div {
-    width: 100% !important;
-    padding-left: 0 !important;
-    border-left: none !important;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
   }
 }
 
@@ -1169,9 +1395,20 @@ button {
     max-width: none;
   }
 
-  /* brand and lang toggle share row 1; keep the toggle on the right edge */
+  /* Brand, queue button and lang toggle share row 1; the buttons hug the
+     right edge. When #queue-btn is hidden (empty queue) its auto margin
+     vanishes with it, so the lang toggle carries a fallback auto margin
+     that the visible queue button cancels via the sibling selector. */
   .lang-toggle {
     margin-left: auto;
+  }
+
+  #queue-btn {
+    margin-left: auto;
+  }
+
+  #queue-btn:not([hidden]) + .lang-toggle {
+    margin-left: 0;
   }
 
   /* column-reverse puts the sidebar under the main list as a tab strip,
@@ -1220,7 +1457,9 @@ button {
     gap: 8px;
   }
 
-  #sidebar .nav-item {
+  #sidebar .nav-item,
+  #sidebar .chip {
+    width: auto;
     min-height: var(--tap);
     padding: 8px 16px;
     border-radius: var(--radius-pill);
@@ -1229,7 +1468,8 @@ button {
     white-space: nowrap;
   }
 
-  #sidebar .nav-item.is-active {
+  #sidebar .nav-item.is-active,
+  #sidebar .chip.is-active {
     background: var(--accent);
     color: var(--on-accent);
   }
@@ -1243,29 +1483,18 @@ button {
   }
 
   .track-row {
-    grid-template-columns: 22px 44px minmax(0, 1fr) auto;
-    gap: 12px;
+    gap: 8px;
     min-height: 60px;
     padding-right: 8px;
   }
 
-  .track-row__art {
-    width: 44px;
-    height: 44px;
-  }
-
-  .track-row__album {
-    display: none;
-  }
-
   .track-row + .track-row::after {
-    left: 78px;
     right: 8px;
   }
 
   /* Two rows, five columns:
-       row 1  [ art + title/artist        ][ prev ][ play ][ next ]
-       row 2  [ shuffle ][ seek bar ................ ][ repeat ]
+       row 1  [ title/artist              ][ prev ][ play ][ next ]
+       row 2  [ mode ][ seek bar .............................. ]
      display:contents dissolves the two wrappers so every control can be
      placed directly on this grid - which is what keeps the title readable
      instead of squeezed into whatever the transport row leaves over. */
@@ -1311,23 +1540,13 @@ button {
 
   .seek-row {
     grid-row: 2;
-    grid-column: 2 / 5;
+    grid-column: 2 / 6;
     max-width: none;
     height: 22px;
   }
 
-  #repeat-btn {
-    grid-row: 2;
-    grid-column: 5;
-  }
-
   .now-playing-volume {
     display: none; /* iOS ignores volume set from JS anyway - hardware keys own it */
-  }
-
-  .now-playing-art {
-    width: 46px;
-    height: 46px;
   }
 
   .play-btn {
@@ -1355,11 +1574,6 @@ button {
 
 /* Landscape phone: the bar would eat the whole screen otherwise */
 @media (max-height: 480px) and (orientation: landscape) {
-  .now-playing-art {
-    width: 40px;
-    height: 40px;
-  }
-
   .app-header {
     padding-top: max(6px, env(safe-area-inset-top));
     padding-bottom: 6px;
@@ -1373,5 +1587,12 @@ button {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* press feedback stays as an opacity dip only - no movement */
+  .pressable:active,
+  .icon-btn:active,
+  .play-btn:active {
+    transform: none !important;
   }
 }
