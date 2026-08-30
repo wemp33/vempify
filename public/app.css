@@ -1146,6 +1146,21 @@ button {
    Round header buttons (#add-song-btn, #queue-btn) + the queue count badge
    ===================================================================== */
 
+/* Grouping the round buttons is what keeps them together. Aligning them
+   individually meant every rule had to account for #queue-btn being hidden
+   whenever the queue is empty, via sibling selectors that silently stopped
+   matching the moment the markup order changed - the two buttons then each
+   took an auto margin and split the free space between them. One flex group
+   owns the right-alignment; the gap between the buttons is a gap, so a hidden
+   queue button simply contributes nothing. */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .header-btn {
   position: relative;
   flex-shrink: 0;
@@ -1813,19 +1828,8 @@ button {
     max-width: none;
   }
 
-  /* Brand and the round buttons share row 1; the buttons hug the right edge.
-     Markup order is queue then add-song, so the "+" sits rightmost. #queue-btn
-     is hidden whenever the queue is empty, so BOTH need the auto margin and
-     add-song has to drop its own whenever queue is actually showing - or the
-     pair would be pushed apart by two auto gaps instead of one. */
-  #queue-btn,
-  #add-song-btn {
-    margin-left: auto;
-  }
-
-  #queue-btn:not([hidden]) ~ #add-song-btn {
-    margin-left: 0;
-  }
+  /* The buttons live in .header-actions, which owns the right-alignment for
+     both breakpoints - nothing to restate here. */
 
   /* column-reverse puts the sidebar under the main list as a tab strip,
      still above the now-playing bar. */

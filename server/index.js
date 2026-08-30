@@ -30,7 +30,20 @@ app.set('trust proxy', 1);
 app.use(authRouter);
 app.use(requireAuth);
 
-app.use(express.static(path.join(projectRoot, 'public')));
+// The service worker script must never be answered from the browser's HTTP
+// cache. If it is, a device can keep re-installing an old worker - and since
+// that worker serves CSS and JS from ITS cache while navigations go to the
+// network, the result is fresh HTML rendered against stale CSS, which is
+// exactly how the header buttons ended up spaced wrong on a real phone.
+app.use(
+  express.static(path.join(projectRoot, 'public'), {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(`${path.sep}sw.js`)) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  })
+);
 
 // Cover art, keyed by track id and therefore content-addressed: safe to cache
 // hard. Private, not public - these live behind the password gate and must not

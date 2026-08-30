@@ -13,7 +13,7 @@
    would keep the cached module that never sets navigator.mediaSession
    .playbackState, so its lock screen would go on dropping the Now Playing card
    the moment a song is paused - the exact bug this bump ships the fix for. */
-const CACHE_NAME = 'vempify-shell-v10';
+const CACHE_NAME = 'vempify-shell-v11';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */
@@ -121,8 +121,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static shell assets: cache first, network as the fallback.
+  // Static shell assets: serve the cached copy immediately, but ALWAYS refetch
+  // in the background and write the new response back (stale-while-revalidate).
+  //
+  // Plain cache-first was a trap. Navigations go to the network, so the HTML is
+  // always current, while CSS and JS came from a cache that nothing ever
+  // revalidated - so a device whose worker failed to update rendered new markup
+  // against old styles indefinitely. iOS is particularly good at not updating a
+  // worker in an installed PWA, so "the version bump will fix it" is not a
+  // guarantee. This way the worst case is one stale load, self-healing on the
+  // next, instead of a mismatch that persists until the cache is cleared by hand.
   event.respondWith(
-    caches.match(request, { ignoreSearch: true }).then((cached) => cached || fetch(request))
+    caches.match(request, { ignoreSearch: true }).then((cached) => {
+      const fresh = fetch(request)
+        .then((response) => {
+          if (isCacheable(response)) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || fresh;
+    })
   );
 });
