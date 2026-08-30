@@ -8,8 +8,12 @@
    (/js/sources/playlists.js), the shared row icons (/js/ui/rowicons.js) and
    the shared panel dismissal/exit motion (/js/ui/modal.js) - and carries the
    restyled CSS. A device still on v7 would serve the old main.js and the old
-   app.css from cache and never see any of it. */
-const CACHE_NAME = 'vempify-shell-v9';
+   app.css from cache and never see any of it.
+   v10 carries the media-session fix in /js/ui/player.js: a phone still on v9
+   would keep the cached module that never sets navigator.mediaSession
+   .playbackState, so its lock screen would go on dropping the Now Playing card
+   the moment a song is paused - the exact bug this bump ships the fix for. */
+const CACHE_NAME = 'vempify-shell-v10';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */

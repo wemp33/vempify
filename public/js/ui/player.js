@@ -52,11 +52,39 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
     // the prev/next arrows. Re-registering on every real play is what makes
     // the arrows stick.
     registerMediaSessionHandlers();
+    setPlaybackState('playing');
     updatePositionState();
   });
   audio.addEventListener('pause', () => {
     if (primingToken) return;
     if (onPlayStateChange) onPlayStateChange(false);
+    // A paused session has to keep announcing itself. iOS infers "there is media
+    // here" from an element that is actually playing; the instant it pauses,
+    // nothing else tells the platform the session is still alive, so it tears
+    // the Now Playing card down and stops delivering remote commands. Declaring
+    // 'paused' - while metadata stays assigned - is the only way to say "still
+    // loaded, just stopped". Re-registering the handlers keeps the lock-screen
+    // buttons answering after the pause, and pinning the position here freezes
+    // the scrubber at the real offset instead of the last timeupdate tick.
+    setPlaybackState('paused');
+    updatePositionState();
+    registerMediaSessionHandlers();
+  });
+  audio.addEventListener('error', () => {
+    if (primingToken) return;
+    // Starting a new track clears audio.error, so an event left over from the
+    // previous source must not be allowed to contradict the track now playing.
+    if (!audio.error) return;
+    // A fatal media error - a dropped stream, a decode failure - stops playback
+    // WITHOUT pausing the element: no 'pause' event fires and audio.paused stays
+    // false (verified in Chromium: MEDIA_ERR_DECODE mid-track leaves paused ===
+    // false forever). Nothing else would ever retract the 'playing' claim, so
+    // the lock screen would sit there showing the track running over silence and
+    // the in-app button would stay a pause icon. Say what is true: still loaded,
+    // no longer playing - which also leaves the card there to retry from.
+    if (onPlayStateChange) onPlayStateChange(false);
+    setPlaybackState('paused');
+    registerMediaSessionHandlers();
   });
 
   function setMediaSessionMetadata(track) {
@@ -70,6 +98,18 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
       });
     } catch {
       /* MediaMetadata unsupported in this browser */
+    }
+  }
+
+  // 'none' belongs only to a session with nothing loaded at all - never to an
+  // ordinary pause, which is exactly what made the card vanish. Older WebKit
+  // throws on values it does not know rather than ignoring them.
+  function setPlaybackState(value) {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.playbackState = value;
+    } catch {
+      /* playbackState unsupported in this browser */
     }
   }
 
@@ -209,10 +249,16 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
           // state - which now also means the row keeps a play triangle over a
           // song that is audibly running. Reassert from the element itself;
           // onPlayStateChange is idempotent, so the ordinary path is unharmed.
-          if (!audio.paused && !primingToken && onPlayStateChange) onPlayStateChange(true);
+          if (!audio.paused && !primingToken) {
+            if (onPlayStateChange) onPlayStateChange(true);
+            setPlaybackState('playing');
+          }
         },
         () => {
           if (onPlayStateChange) onPlayStateChange(false);
+          // Rejected play(): a track is loaded but silent, so the session is
+          // paused - not playing, and not gone.
+          if (!primingToken) setPlaybackState('paused');
         }
       );
     }
@@ -258,6 +304,10 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
   };
 
   registerMediaSessionHandlers();
+  // Nothing is loaded yet - the one honest use of 'none'. The muted priming
+  // cycle that may follow is invisible to the platform (see primeAudio), so the
+  // card only appears once a real track starts.
+  setPlaybackState('none');
 
   return player;
 }
