@@ -11,15 +11,19 @@
   --border: #2a2a35;
   --text: #f4f4f7;
   --muted: #9b9baa;
-  --accent: #8b5cf6;
-  --accent-2: #c084fc;
+  /* Brighter and pinker than the violet pair this replaced: the accent now sits
+     in the same family as the logo tile's #c4b5fd instead of reading as a
+     colder, darker purple beside it. Every accent surface in the app resolves
+     through these five names - nothing hardcodes a purple any more. */
+  --accent: #a855f7;
+  --accent-2: #e879f9;
 
   /* --- derived --- */
   --surface-hover: #23232e;
   --faint: #6b6b7b;
-  --on-accent: #17021f;
-  --accent-soft: rgba(139, 92, 246, 0.14);
-  --accent-glow: rgba(139, 92, 246, 0.28);
+  --on-accent: #1a0326;
+  --accent-soft: rgba(168, 85, 247, 0.16);
+  --accent-glow: rgba(168, 85, 247, 0.32);
 
   /* Aliases: earlier modules referenced these names. Keep them pointing at
      the contract tokens so nothing renders un-themed. */
@@ -43,6 +47,10 @@
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   --t-fast: 120ms var(--ease);
   --t-med: 160ms var(--ease);
+  /* Duration only, no easing: panels animate with `animation`, and ui/modal.js
+     needs the bare number to know how long to wait before removing the node.
+     Change it here and change EXIT_MS there. */
+  --t-panel: 180ms;
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 -8px 32px rgba(0, 0, 0, 0.5);
@@ -321,7 +329,7 @@ button {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   background:
-    radial-gradient(900px 320px at 22% -8%, rgba(139, 92, 246, 0.11), transparent 70%),
+    radial-gradient(900px 320px at 22% -8%, rgba(168, 85, 247, 0.13), transparent 70%),
     var(--bg);
 }
 
@@ -396,6 +404,138 @@ button {
   white-space: nowrap;
 }
 
+/* ---------- the active playlist's "..." affordance ----------
+   A chip is a <button>, so the options control cannot live inside it. It is a
+   sibling, absolutely placed over the chip's right end, and the chip is given
+   matching right padding so a long name never runs under it. Positioning it
+   this way leaves every existing chip rule - the pill on phones, the accent
+   fill when active, the desktop marker bar - completely untouched. */
+
+.nav-tab {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.nav-tab > .chip {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* #sidebar-scoped on purpose: the padding shorthand that sets the chip's
+   12px sides is written as "#sidebar .chip", and a bare class selector loses
+   to it - the label would then run underneath the "...". */
+#sidebar .nav-tab.has-options > .chip,
+.nav-tab.has-options > .chip {
+  padding-right: 40px;
+}
+
+.chip-options {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 44px of target for a 16px glyph: the visual weight is the three dots, the
+     tap area is the whole right end of the chip. */
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: color var(--t-fast), background var(--t-fast);
+}
+
+.chip-options svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  fill: currentColor;
+  pointer-events: none;
+}
+
+.chip-options:active {
+  color: var(--text);
+}
+
+/* =====================================================================
+   Playlist options menu (Rename / Delete)
+
+   Mounted on <body>, not inside the sidebar: on a phone the sidebar is a
+   horizontally scrolling strip with overflow hidden on the cross axis, and an
+   absolutely positioned menu inside it would be clipped away. Its position is
+   computed from the chip's bounding rect, so it still reads as anchored.
+   ===================================================================== */
+
+.chip-menu-layer {
+  position: fixed;
+  inset: 0;
+  /* Over the header (20) and the now-playing bar (30), under a modal (100):
+     a dialog opened from this menu must cover it. */
+  z-index: 95;
+}
+
+.chip-menu {
+  position: absolute;
+  min-width: 168px;
+  padding: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  animation: chip-menu-in 140ms var(--ease) both;
+}
+
+@keyframes chip-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.chip-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+
+.chip-menu__item:active {
+  background: var(--surface-hover);
+}
+
+.chip-menu__item svg {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 /* =====================================================================
    Track list
    ===================================================================== */
@@ -457,7 +597,7 @@ button {
 
 .track-row.is-playing {
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.26);
 }
 
 .track-row.is-playing::before {
@@ -556,48 +696,70 @@ button {
    Queue panel
    ===================================================================== */
 
+/* The queue answers one question - what plays next - so a row carries the
+   title and nothing else. It used to stack title over artist inside a
+   <button> that had no styling at all, so the browser drew its own control:
+   a grey pill with the two strings running together on one line. The button
+   is now a real, flat, full-height cell in column 1.
+
+   One row, four columns:
+     [ title ................. ][ up ][ down ][ remove ]
+   Every control is a 44px square, and the title cell is what is left. */
+
 .queue-list {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
-/* li.queue-item in the queue modal: stacked title/artist in column 1,
-   then move-up, move-down and remove buttons alongside (44px targets). */
 .queue-item {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
-  grid-template-rows: auto auto;
   align-items: center;
   column-gap: 2px;
   min-height: var(--tap);
-  padding: 6px 2px 6px 10px;
+  padding-left: 8px;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
   transition: background var(--t-fast);
 }
 
-.queue-item-title {
+/* Column 1: a transparent, left-aligned button that fills the row's height,
+   so the whole free width of the row is the "play this entry" target. */
+.queue-item-text {
   grid-column: 1;
-  grid-row: 1;
-  align-self: end;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 10px 0 4px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.queue-item-artist {
-  grid-column: 1;
-  grid-row: 2;
-  align-self: start;
+.queue-item-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .queue-move,
 .queue-remove {
-  grid-row: 1 / 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -642,7 +804,7 @@ button {
 .queue-item.active::before {
   content: "";
   position: absolute;
-  left: 3px;
+  left: 2px;
   top: 50%;
   width: 3px;
   height: 55%;
@@ -651,25 +813,8 @@ button {
   transform: translateY(-50%);
 }
 
-.queue-item-title,
-.queue-item-artist {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.queue-item-title {
-  font-size: 0.86rem;
-  font-weight: 600;
-}
-
 .queue-item.active .queue-item-title {
   color: var(--accent-2);
-}
-
-.queue-item-artist {
-  font-size: 0.76rem;
-  color: var(--muted);
 }
 
 /* =====================================================================
@@ -687,7 +832,7 @@ button {
   padding: 48px 24px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-lg);
-  background: radial-gradient(600px 200px at 50% 0%, rgba(139, 92, 246, 0.08), transparent 70%);
+  background: radial-gradient(600px 200px at 50% 0%, rgba(168, 85, 247, 0.10), transparent 70%);
   color: var(--muted);
   font-size: 0.95rem;
   text-align: center;
@@ -1089,6 +1234,14 @@ button {
   justify-content: center;
   padding: 24px max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   background: rgba(0, 0, 0, 0.5);
+  /* Not decoration. Safari on iOS only synthesises a click for a tap on an
+     element it considers "clickable" - a link, a form control, something with
+     an onclick attribute, or something with cursor:pointer. A bare <div> with
+     a JS click listener is none of those, which is exactly why dismissing by
+     tapping the dim area worked on a desktop mouse and did nothing at all on
+     the phone. The dismissal itself now runs on pointer events (see
+     ui/modal.js), and this keeps Safari's own heuristic on side too. */
+  cursor: pointer;
 }
 
 .modal-card {
@@ -1103,6 +1256,76 @@ button {
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: var(--shadow-sm);
+  /* The dim area is the dismiss target; the card is not. */
+  cursor: default;
+}
+
+/* ---------- panel motion ----------
+   Every panel in the app is a .modal-backdrop wrapping a .modal-card, so the
+   enter animation is attached to the shape rather than to any one module: the
+   queue panel, the playlist picker, the upload dialog, the new-playlist modal
+   and the rename/confirm dialogs all rise the same way with no JS at all.
+   Leaving is the half that needs code, because a removed node cannot animate -
+   ui/modal.js adds .is-closing, waits, then removes.
+   Under prefers-reduced-motion the blanket rule at the bottom of this file
+   collapses both durations to 0.01ms, so the panels simply appear. */
+
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes modal-card-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+.modal-backdrop {
+  animation: modal-backdrop-in var(--t-panel) var(--ease) both;
+}
+
+.modal-backdrop > .modal-card {
+  animation: modal-card-in var(--t-panel) var(--ease) both;
+}
+
+.modal-backdrop.is-closing {
+  animation-name: modal-backdrop-out;
+  /* A panel on its way out must not take another tap. */
+  pointer-events: none;
+}
+
+.modal-backdrop.is-closing > .modal-card {
+  animation-name: modal-card-out;
 }
 
 .modal-header {
@@ -1176,6 +1399,15 @@ button {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* A dialog whose whole body is one field (new playlist, rename playlist)
+   drops the title straight onto the input with nothing between them. The
+   title carries no margin of its own because in every other panel it sits
+   inside .modal-header, which does. */
+.modal-card > .modal-title + .modal-input,
+.modal-card > .modal-title + input[type="text"] {
+  margin-top: 12px;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -1209,6 +1441,16 @@ button {
 .modal-actions button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* The palette holds no red, so a destructive confirm cannot be signalled with
+   colour. It is signalled by weight instead: an outlined button that reads as
+   the second choice next to a filled one, so the accent fill always belongs to
+   the safe action (Cancel keeps the focus, see sidebar.js). */
+.modal-actions button.modal-btn--destructive {
+  background: transparent;
+  border-color: var(--accent-2);
+  color: var(--accent-2);
 }
 
 /* The header can carry a second line (the picker names the track); the text
@@ -1494,6 +1736,15 @@ button {
     background: var(--surface-hover);
   }
 
+  .chip-options:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .chip-menu__item:hover {
+    background: var(--surface-hover);
+  }
+
   .header-btn:hover {
     border-color: var(--accent);
     color: var(--text);
@@ -1516,6 +1767,18 @@ button {
   .modal-actions .modal-btn--primary:hover {
     background: var(--accent-2);
     border-color: var(--accent-2);
+  }
+
+  /* Beats the rule above on specificity: a destructive confirm must not fill
+     with the accent on hover, or it stops reading as the second choice. */
+  .modal-actions button.modal-btn--destructive:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent-2);
+    color: var(--accent-2);
+  }
+
+  .queue-item-text:hover .queue-item-title {
+    color: var(--text);
   }
 
   .modal-close:hover {
@@ -1666,6 +1929,23 @@ button {
     display: none;
   }
 
+  /* The "..." sits on top of the accent pill here, so it takes the pill's
+     foreground colour rather than the muted grey it uses on desktop. */
+  #sidebar .nav-tab.has-options > .chip {
+    padding-right: 38px;
+  }
+
+  #sidebar .chip-options {
+    right: -4px;
+    color: var(--on-accent);
+    opacity: 0.7;
+  }
+
+  #sidebar .chip-options:active {
+    color: var(--on-accent);
+    opacity: 1;
+  }
+
   .main {
     padding: 16px var(--safe-right) 24px var(--safe-left);
   }
@@ -1788,5 +2068,18 @@ button {
   .icon-btn:active,
   .play-btn:active {
     transform: none !important;
+  }
+
+  /* Panels appear and disappear, full stop. The blanket rule above already
+     collapses the durations, but naming the animations off is what guarantees
+     no rise and no scale even for a single frame - and ui/modal.js reads the
+     same media query, so it removes the node straight away instead of waiting
+     out an animation that is not running. */
+  .modal-backdrop,
+  .modal-backdrop > .modal-card,
+  .modal-backdrop.is-closing,
+  .modal-backdrop.is-closing > .modal-card,
+  .chip-menu {
+    animation: none !important;
   }
 }

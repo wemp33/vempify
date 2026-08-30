@@ -3,8 +3,13 @@
    below deletes every other vempify-shell-* cache, so the bump is what
    actually retires the stale copies.
    v7 adds the add-song dialog (/js/ui/upload.js); an installed phone still on
-   v6 would fetch main.js from cache and fail to resolve the new import. */
-const CACHE_NAME = 'vempify-shell-v7';
+   v6 would fetch main.js from cache and fail to resolve the new import.
+   v8 adds three modules main.js now imports - the server-backed playlist API
+   (/js/sources/playlists.js), the shared row icons (/js/ui/rowicons.js) and
+   the shared panel dismissal/exit motion (/js/ui/modal.js) - and carries the
+   restyled CSS. A device still on v7 would serve the old main.js and the old
+   app.css from cache and never see any of it. */
+const CACHE_NAME = 'vempify-shell-v8';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */
@@ -22,7 +27,10 @@ const SHELL_PATHS = [
   '/js/db.js',
   '/js/i18n.js',
   '/js/sources/local.js',
+  '/js/sources/playlists.js',
+  '/js/ui/modal.js',
   '/js/ui/player.js',
+  '/js/ui/rowicons.js',
   '/js/ui/swipe.js',
   '/js/ui/playlist-picker.js',
   '/js/ui/upload.js',

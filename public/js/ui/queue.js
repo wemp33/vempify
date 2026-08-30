@@ -2,8 +2,18 @@
 // picker) listing the queued tracks with move/remove controls. The panel
 // keeps its own working copy of the list so every move or removal shows up
 // immediately, while onReorder/onRemove keep the app state in sync.
+//
+// A row shows the TITLE and nothing else. The queue answers "what plays
+// next", and a title is the whole answer; the artist was noise stacked under
+// every line. (It was worse than noise before: the title and the artist sat
+// inside an unstyled <button>, so the browser drew its own control around
+// them - a grey pill with the two strings run together on one line. The row
+// is now a proper four-column grid, see .queue-item in app.css.)
+//
+// Dismissal and exit motion are shared with every other panel - ui/modal.js.
 
 import { getLang } from '../i18n.js';
+import { bindDismiss, dismissModal } from './modal.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -64,13 +74,14 @@ export function renderQueuePanel(mount, tracks, { onReorder, onRemove, onPlayInd
 
   function close() {
     if (shell) shell.classList.remove('is-blurred');
-    backdrop.remove();
+    // onClose runs immediately rather than after the exit animation: the
+    // caller uses it to drop its handle on this panel, and it must not still
+    // be holding one if the user reopens the queue straight away.
+    dismissModal(backdrop);
     if (typeof onClose === 'function') onClose();
   }
 
-  backdrop.addEventListener('click', (event) => {
-    if (event.target === backdrop) close();
-  });
+  bindDismiss(backdrop, close);
 
   const header = document.createElement('div');
   header.className = 'modal-header';
@@ -138,22 +149,18 @@ export function renderQueuePanel(mount, tracks, { onReorder, onRemove, onPlayInd
       const item = document.createElement('li');
       item.className = 'queue-item';
 
-      // The text block is a button of its own: tapping it plays this entry.
+      // Column 1 is a button of its own: tapping the title plays this entry.
       const text = document.createElement('button');
       text.type = 'button';
       text.className = 'queue-item-text pressable';
       text.style.minHeight = '44px';
+      text.title = track.title;
 
       const titleEl = document.createElement('span');
       titleEl.className = 'queue-item-title';
       titleEl.textContent = track.title;
 
-      const artistEl = document.createElement('span');
-      artistEl.className = 'queue-item-artist';
-      artistEl.textContent = track.artist;
-
       text.appendChild(titleEl);
-      text.appendChild(artistEl);
       text.addEventListener('click', () => {
         if (typeof onPlayIndex === 'function') onPlayIndex(index);
         // The played entry (and everything before it) leaves the queue, so

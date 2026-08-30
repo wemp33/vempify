@@ -4,6 +4,7 @@ import path from 'node:path';
 import libraryRouter from './library.js';
 import streamRouter from './stream.js';
 import tracksRouter from './tracks.js';
+import playlistsRouter from './playlists.js';
 import { authRouter, requireAuth } from './auth.js';
 import { DATA_DIR, coversDir, ensureStorage, seedFromBundleIfEmpty } from './storage.js';
 
@@ -49,6 +50,9 @@ app.use('/api', libraryRouter);
 // Upload and delete. Behind requireAuth like everything else under /api, and
 // the only place a raw body parser is mounted.
 app.use('/api', tracksRouter);
+// Playlists, shared by every device. Mounted after tracksRouter so the raw
+// body parser stays scoped to /api/tracks and never sees a playlist request.
+app.use('/api', playlistsRouter);
 app.use('/audio', streamRouter);
 
 const PORT = process.env.PORT || 3000;

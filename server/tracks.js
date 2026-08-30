@@ -20,6 +20,7 @@ import {
   sniffContainer,
   pictureExtension,
 } from './storage.js';
+import { removeTrackFromPlaylists } from './playlists.js';
 
 const router = Router();
 
@@ -265,6 +266,18 @@ router.delete('/tracks/:id', async (req, res) => {
     if (!removed) {
       res.status(404).json({ error: 'No such track.' });
       return;
+    }
+
+    // The user's own playlists live in their own file now, so the loop above
+    // (which only cleans library.json's bundled playlists) is no longer the
+    // whole job. A failure here leaves a phantom row rather than a broken
+    // delete, so it is logged and the delete still reports success.
+    try {
+      await removeTrackFromPlaylists(id);
+    } catch (err) {
+      console.error(
+        `[vempify] removed track ${id} but could not clean it out of playlists.json: ${err.stack || err.message}`
+      );
     }
 
     // The files go after the library is safely written: an orphaned file is

@@ -31,8 +31,11 @@
       --border: #2a2a35;
       --text: #f4f4f7;
       --muted: #9b9baa;
-      --accent: #8b5cf6;
-      --accent-2: #c084fc;
+      --accent: #a855f7;
+      --accent-2: #e879f9;
+      --accent-soft: rgba(168, 85, 247, 0.16);
+      --accent-glow: rgba(168, 85, 247, 0.32);
+      --on-accent: #1a0326;
     }
 
     * { box-sizing: border-box; }
@@ -62,8 +65,8 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(60% 45% at 50% 0%, rgba(139, 92, 246, 0.16), transparent 70%),
-        radial-gradient(45% 35% at 50% 100%, rgba(192, 132, 252, 0.08), transparent 70%);
+        radial-gradient(60% 45% at 50% 0%, var(--accent-soft), transparent 70%),
+        radial-gradient(45% 35% at 50% 100%, rgba(232, 121, 249, 0.08), transparent 70%);
     }
 
     .card {
@@ -179,7 +182,7 @@
 
     .password-input:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+      box-shadow: 0 0 0 3px var(--accent-glow);
     }
 
     .submit-btn {
@@ -190,7 +193,7 @@
       font-family: inherit;
       font-size: 1rem;
       font-weight: 600;
-      color: #0b0b0f;
+      color: var(--on-accent);
       background: var(--accent);
       border: none;
       border-radius: 10px;
@@ -214,10 +217,119 @@
       color: var(--muted);
     }
 
+    /* A device that still holds a device token re-authenticates silently before
+       this page is ever shown (see the script below). Only the card is hidden,
+       so the violet wash still reads as the app rather than as a blank screen,
+       and the class comes off the instant the attempt settles - or after four
+       seconds if the request hangs. */
+    html.resuming .card { visibility: hidden; }
+
     @media (prefers-reduced-motion: reduce) {
       * { transition: none !important; }
     }
   </style>
+  <script>
+    /* Silent re-login. iOS gives a standalone PWA its own storage container and
+       evicts cookies from it aggressively, so the session cookie alone cannot
+       promise "type the password once per device". A device token stored here
+       at the first successful login buys a fresh cookie back without the user
+       seeing anything.
+
+       Runs in <head>, before the card paints, so the honest case (a valid
+       token) never flashes a password form the user does not need to fill in.
+       Everything is wrapped: localStorage throws outright in some privacy
+       modes, and a failure there must still end with a usable form. */
+    (function () {
+      var KEY = 'vempify_device_token';
+
+      // ?error=1 means a password was just submitted and refused. Whoever is
+      // at the keyboard is deliberately typing into this form, so resuming
+      // them past it - even with a token that would work - is the wrong
+      // answer; show the error and let them try again.
+      if (location.search.indexOf('error') !== -1) return;
+
+      var token = null;
+      try {
+        token = window.localStorage.getItem(KEY);
+      } catch (e) {
+        token = null;
+      }
+      if (!token) return; // nothing stored: the form paints normally
+
+      var root = document.documentElement;
+      root.classList.add('resuming');
+
+      var settled = false;
+
+      function showForm() {
+        if (settled) return;
+        settled = true;
+        root.classList.remove('resuming');
+        // autofocus is skipped while the card is hidden, so restore it by hand.
+        var focusInput = function () {
+          var input = document.getElementById('password');
+          if (input) {
+            try {
+              input.focus();
+            } catch (e) {
+              /* focus refused - the form is still usable */
+            }
+          }
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', focusInput, { once: true });
+        } else {
+          focusInput();
+        }
+      }
+
+      // The backstop: no matter how the request behaves, nobody is left staring
+      // at an empty page for more than four seconds.
+      var timer = setTimeout(showForm, 4000);
+
+      function forgetToken() {
+        try {
+          window.localStorage.removeItem(KEY);
+        } catch (e) {
+          /* storage unavailable */
+        }
+      }
+
+      try {
+        fetch('/auth/resume', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token })
+        }).then(
+          function (response) {
+            if (response.ok) {
+              // The cookie is set. Replace rather than assign so Back cannot
+              // land the user on a login page they no longer need.
+              clearTimeout(timer);
+              settled = true; // the redirect IS the outcome - do not flash the form
+              window.location.replace('/');
+              return;
+            }
+            // The server looked at the token and refused it. A 5xx is not the
+            // token's fault, so only a client-side rejection discards it.
+            if (response.status >= 400 && response.status < 500) forgetToken();
+            clearTimeout(timer);
+            showForm();
+          },
+          function () {
+            // Offline or the request failed to leave the device: keep the token,
+            // it is probably still good, and just show the form.
+            clearTimeout(timer);
+            showForm();
+          }
+        );
+      } catch (e) {
+        clearTimeout(timer);
+        showForm();
+      }
+    })();
+  </script>
 </head>
 <body>
   <main class="card">

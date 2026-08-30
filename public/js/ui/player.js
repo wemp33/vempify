@@ -200,9 +200,21 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
   function attemptPlayback() {
     const attempt = audio.play();
     if (attempt && typeof attempt.then === 'function') {
-      attempt.catch(() => {
-        if (onPlayStateChange) onPlayStateChange(false);
-      });
+      attempt.then(
+        () => {
+          // The 'play' event is the normal source of truth, but it only fires
+          // on a paused->playing edge. If primeAudio's muted play() is still in
+          // flight the element is already unpaused, so the real play() resolves
+          // without an event and the UI would keep showing a stale stopped
+          // state - which now also means the row keeps a play triangle over a
+          // song that is audibly running. Reassert from the element itself;
+          // onPlayStateChange is idempotent, so the ordinary path is unharmed.
+          if (!audio.paused && !primingToken && onPlayStateChange) onPlayStateChange(true);
+        },
+        () => {
+          if (onPlayStateChange) onPlayStateChange(false);
+        }
+      );
     }
   }
 

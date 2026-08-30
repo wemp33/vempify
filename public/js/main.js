@@ -1,15 +1,14 @@
-import {
-  initDB,
-  putTracks,
-  getAllTracks,
-  incrementPlayCount,
-  getUserPlaylists,
-  createUserPlaylist,
-  toggleTrackInUserPlaylist
-} from './db.js';
+import { initDB, putTracks, getAllTracks, incrementPlayCount, getUserPlaylists } from './db.js';
 import { store } from './state.js';
 import { t, setLang, getLang } from './i18n.js';
 import { fetchLibrary, streamUrl } from './sources/local.js';
+import {
+  listPlaylists,
+  createPlaylist,
+  renamePlaylist,
+  deletePlaylist,
+  toggleTrack
+} from './sources/playlists.js';
 import { attachSwipe } from './ui/swipe.js';
 import { openPlaylistPicker } from './ui/playlist-picker.js';
 import { openUploadDialog } from './ui/upload.js';
@@ -18,8 +17,22 @@ import { renderTabs } from './ui/sidebar.js';
 import { renderNowPlaying } from './ui/nowplaying.js';
 import { createPlayer } from './ui/player.js';
 import { renderSearch } from './ui/search.js';
+import { playIcon, pauseIcon } from './ui/rowicons.js';
+import { bindDismiss, dismissModal } from './ui/modal.js';
 
 const HISTORY_CAP = 50;
+
+// A device token outlives the session cookie: iOS gives a standalone PWA its
+// own storage jar and evicts cookies from it aggressively, so the cookie alone
+// cannot promise "type the password once per device". The token can silently
+// buy a new cookie back (POST /auth/resume), and it is only ever a
+// server-signed string - it is not the password and cannot be forged.
+const DEVICE_TOKEN_KEY = 'vempify_device_token';
+
+// Set once the local IndexedDB playlists have been pushed up to the server, or
+// once this device has seen a server that already has playlists. Both cases
+// mean "there is nothing left here to migrate".
+const MIGRATION_KEY = 'vempify_playlists_migrated';
 
 // Messages the shared i18n key set does not carry: the "+" modal's three
 // validation lines, plus the toast that confirms an uploaded song landed.
@@ -65,18 +78,109 @@ function isSearching() {
   return Boolean(searchInput && searchInput.value.trim() !== '');
 }
 
+// ---------------------------------------------------------------------------
+// Session: the device token that keeps the password from being asked twice
+
+// localStorage throws outright in some privacy modes (and in a webview with
+// site data blocked), so every touch of it is guarded. Losing the token is
+// survivable - it only costs one password prompt - but an exception here would
+// take the whole boot down with it.
+function readStored(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable - carry on without persistence */
+  }
+}
+
+function removeStored(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+// Trades the stored device token for a fresh session cookie. Resolves true only
+// when the server actually set one.
+async function resumeSession() {
+  const token = readStored(DEVICE_TOKEN_KEY);
+  if (!token) return false;
+
+  try {
+    const response = await fetch('/auth/resume', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    if (response.ok) return true;
+    // The server looked at the token and refused it: it is dead weight now.
+    // A 5xx or a network error is NOT the token's fault, so those keep it.
+    if (response.status >= 400 && response.status < 500) removeStored(DEVICE_TOKEN_KEY);
+  } catch {
+    /* offline - keep the token and let the caller fail normally */
+  }
+  return false;
+}
+
+// Runs a request that needs a session; if it comes back 401 the stored device
+// token gets one chance to re-authenticate, then the request is retried exactly
+// once. This is what survives iOS evicting the cookie under an installed app.
+async function withSession(run) {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isUnauthorized(error)) throw error;
+    if (!(await resumeSession())) throw error;
+    return await run();
+  }
+}
+
+// The login form posts and the server redirects, so there is no client-side
+// "login succeeded" moment to hook. Instead: any boot that has a working
+// session but no stored token mints one. Best effort - a failure here just
+// means the next boot tries again.
+async function ensureDeviceToken() {
+  if (readStored(DEVICE_TOKEN_KEY)) return;
+  try {
+    const response = await fetch('/auth/device-token', { credentials: 'same-origin' });
+    if (!response.ok) return;
+    const body = await response.json();
+    if (body && typeof body.token === 'string' && body.token) {
+      writeStored(DEVICE_TOKEN_KEY, body.token);
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+
 async function boot() {
   await initDB();
 
   let tracks;
+  let online = false;
   try {
-    const library = await fetchLibrary();
+    const library = await withSession(() => fetchLibrary());
     tracks = library.tracks;
+    online = true;
     await putTracks(tracks);
   } catch (error) {
-    // The session behind the password gate expired. Falling back to the cache
-    // would render a library whose audio the server now refuses to stream, so
-    // send the user to the login page instead of faking a working app.
+    // Still unauthorized after the device token had its turn: the password
+    // really is needed. Falling back to the cache would render a library whose
+    // audio the server now refuses to stream, so show the gate instead of
+    // faking a working app.
     if (isUnauthorized(error)) {
       window.location.replace('/login');
       return;
@@ -84,12 +188,81 @@ async function boot() {
     tracks = await getAllTracks();
   }
 
-  // User playlists never touch the server - they live only in IndexedDB.
-  const userPlaylists = await getUserPlaylists();
+  // Playlists now live on the server so every device sees the same ones; the
+  // IndexedDB copies are the migration source and the offline fallback.
+  const userPlaylists = online ? await syncPlaylists() : await getUserPlaylists();
 
   store.setState({ tracks, userPlaylists, lang: getLang() });
 
   setupDom();
+
+  ensureDeviceToken();
+}
+
+// Reads the server's playlists and, exactly once per device, pushes up whatever
+// only exists in IndexedDB. The local copies are never deleted - they are the
+// only backup of lists that were browser-local until now.
+async function syncPlaylists() {
+  let serverPlaylists;
+  try {
+    serverPlaylists = await withSession(() => listPlaylists());
+  } catch {
+    return getUserPlaylists();
+  }
+
+  const alreadyMigrated = readStored(MIGRATION_KEY) === 'done';
+  if (alreadyMigrated || serverPlaylists.length > 0) {
+    // Seeing a populated server counts as migrated: without this, deleting
+    // every playlist and reloading would resurrect the old local ones.
+    if (!alreadyMigrated) writeStored(MIGRATION_KEY, 'done');
+    return serverPlaylists;
+  }
+
+  let local = [];
+  try {
+    local = await getUserPlaylists(); // already ordered by createdAt
+  } catch {
+    local = [];
+  }
+
+  if (local.length === 0) {
+    writeStored(MIGRATION_KEY, 'done');
+    return serverPlaylists;
+  }
+
+  for (const playlist of local) {
+    try {
+      await createPlaylist(playlist.name);
+    } catch (error) {
+      // 409 means the name is already up there (a second device racing this
+      // same migration); its tracks are still worth merging in. Anything else
+      // is logged and skipped so one bad list cannot strand the others.
+      if (error.status !== 409) {
+        console.warn(`[vempify] could not migrate playlist "${playlist.name}"`, error);
+        continue;
+      }
+    }
+
+    for (const trackId of playlist.trackIds ?? []) {
+      try {
+        const member = await toggleTrack(playlist.name, trackId);
+        // The toggle removed it, which means it was already there (a merged
+        // name clash). Put it back.
+        if (!member) await toggleTrack(playlist.name, trackId);
+      } catch (error) {
+        console.warn(`[vempify] could not migrate a track into "${playlist.name}"`, error);
+      }
+    }
+  }
+
+  writeStored(MIGRATION_KEY, 'done');
+
+  // Re-read rather than trust the local shapes: the server is the truth now.
+  try {
+    return await listPlaylists();
+  } catch {
+    return local;
+  }
 }
 
 function setupDom() {
@@ -216,6 +389,11 @@ function render(state) {
       activeName: state.activePlaylist,
       onSelect: selectPlaylist,
       onAdd: openNewPlaylistModal,
+      // Both reject with the API error (which carries .status), so the sidebar
+      // can tell a 409 name clash from a failure and word its inline message
+      // accordingly.
+      onRename: renameActivePlaylist,
+      onDelete: deleteActivePlaylist,
       t
     });
   }
@@ -247,11 +425,30 @@ function render(state) {
   warmNextTrack(state);
 }
 
+// Repaints everything a row shows about "what is playing right now": the
+// highlight, and whether the leading button is a play triangle or the pause
+// bars. Runs on every store notification, so it never rebuilds a row - only a
+// button whose icon actually changed is touched.
 function updateTrackRowHighlight() {
   if (!mainEl) return;
+  const { isPlaying } = store.getState();
   mainEl.querySelectorAll('.track-row').forEach((row) => {
-    row.classList.toggle('is-playing', row.dataset.trackId === currentTrackId);
+    const isCurrent = row.dataset.trackId === currentTrackId;
+    row.classList.toggle('is-playing', isCurrent);
+    const button = row.querySelector('.track-row__play');
+    if (button) paintRowPlayButton(button, isCurrent && isPlaying);
   });
+}
+
+// The two shapes come from ui/rowicons.js - the same module the transport uses -
+// so a row's pause bars can never drift from the bottom bar's.
+function paintRowPlayButton(button, showPause) {
+  const wanted = showPause ? 'pause' : 'play';
+  if (button.dataset.icon === wanted) return;
+  button.dataset.icon = wanted;
+  button.replaceChildren(showPause ? pauseIcon() : playIcon());
+  const title = button.dataset.trackTitle ?? '';
+  button.setAttribute('aria-label', `${showPause ? t('pause') : t('play')}: ${title}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -294,18 +491,6 @@ function formatDuration(totalSeconds) {
   return `${minutes}:${String(remainder).padStart(2, '0')}`;
 }
 
-function createPlayIcon() {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'icon');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  const triangle = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-  triangle.setAttribute('class', 'solid');
-  triangle.setAttribute('points', '8,5 19,12 8,19');
-  svg.appendChild(triangle);
-  return svg;
-}
-
 function renderTrackList(tracks) {
   if (!mainEl) return;
   displayedTracks = tracks;
@@ -333,12 +518,14 @@ function renderTrackList(tracks) {
     const playBtn = document.createElement('button');
     playBtn.type = 'button';
     playBtn.className = 'track-row__play icon-btn pressable';
-    playBtn.setAttribute('aria-label', `${t('play')}: ${track.title}`);
-    playBtn.appendChild(createPlayIcon());
+    playBtn.dataset.trackTitle = track.title;
+    // Shows the pause bars while THIS row is the one playing, so the button is
+    // always the action it performs.
+    paintRowPlayButton(playBtn, track.id === currentTrackId && store.getState().isPlaying);
     playBtn.addEventListener('click', (event) => {
       // The whole row plays too - without this the tap would count twice.
       event.stopPropagation();
-      playFromList(listIds, index);
+      toggleRowPlayback(listIds, index);
     });
 
     const main = document.createElement('div');
@@ -412,6 +599,25 @@ function playFromList(listIds, index) {
   if (id == null) return;
   store.setState({ context: listIds.slice(), contextIndex: index });
   playTrackById(id);
+}
+
+// The row's leading button. On the track that is already loaded it acts as a
+// transport control - pause, or resume from where it stopped - and on any other
+// row it starts that track exactly as tapping the row does.
+function toggleRowPlayback(listIds, index) {
+  const id = listIds[index];
+  if (id == null) return;
+
+  if (id === currentTrackId) {
+    if (store.getState().isPlaying) {
+      player.pause();
+    } else {
+      player.resume();
+    }
+    return;
+  }
+
+  playFromList(listIds, index);
 }
 
 // A song ending never stops the music: queue head first, then endless order or
@@ -585,7 +791,7 @@ function openPickerFor(track) {
       return Boolean(playlist && playlist.trackIds.includes(track.id));
     },
     onToggle: async (name) => {
-      const nowMember = await toggleTrackInUserPlaylist(name, track.id);
+      const nowMember = await withSession(() => toggleTrack(name, track.id));
       await refreshUserPlaylists();
       // If the list on screen is the playlist that just changed, repaint it so
       // the row appears/disappears immediately behind the modal.
@@ -597,9 +803,59 @@ function openPickerFor(track) {
   });
 }
 
-async function refreshUserPlaylists() {
-  const userPlaylists = await getUserPlaylists();
-  store.setState({ userPlaylists });
+// Pulls the server's list into the store. The extra patch rides along in the
+// same notification so a rename can move the active chip without a repaint that
+// briefly shows no chip selected at all.
+async function refreshUserPlaylists(patch = {}) {
+  let userPlaylists;
+  try {
+    userPlaylists = await withSession(() => listPlaylists());
+  } catch (error) {
+    if (isUnauthorized(error)) {
+      window.location.replace('/login');
+      return;
+    }
+    // A hiccup or a dropped connection: keep the chips that are on screen
+    // rather than blanking the strip, but still apply the caller's patch.
+    store.setState(patch);
+    return;
+  }
+  store.setState({ userPlaylists, ...patch });
+}
+
+// Rename and delete are reached from the active chip's "..." menu, which owns
+// the modal, the confirmation and the inline error. Both of these rethrow the
+// API error untouched so that .status === 409 can be reported as "that name is
+// taken" rather than as a generic failure.
+async function renameActivePlaylist(oldName, newName) {
+  // The menu only ever opens on the active chip, so a single-argument call
+  // ("rename the active one to this") means the same thing.
+  const from = typeof newName === 'string' ? oldName : store.getState().activePlaylist;
+  const to = typeof newName === 'string' ? newName : oldName;
+  if (!from || typeof to !== 'string') return;
+
+  const updated = await withSession(() => renamePlaylist(from, to));
+  const finalName = updated && updated.name ? updated.name : to;
+
+  const wasActive = store.getState().activePlaylist === from;
+  await refreshUserPlaylists(wasActive ? { activePlaylist: finalName } : {});
+  if (wasActive && !isSearching()) renderActiveList();
+}
+
+async function deleteActivePlaylist(name) {
+  const target = typeof name === 'string' ? name : store.getState().activePlaylist;
+  if (!target) return;
+
+  await withSession(() => deletePlaylist(target));
+
+  const wasActive = store.getState().activePlaylist === target;
+  await refreshUserPlaylists(wasActive ? { activePlaylist: null } : {});
+  if (wasActive) {
+    // Deleting the list that is on screen falls back to "All songs"; a live
+    // search would otherwise keep painting results over it.
+    if (searchInput && searchInput.value !== '') searchInput.value = '';
+    renderActiveList();
+  }
 }
 
 function inlineMessage(kind) {
@@ -663,8 +919,12 @@ function openNewPlaylistModal() {
   backdrop.appendChild(card);
 
   function close() {
+    // Unblur with the panel, not after it: the shell sharpens while the card is
+    // still on its way out, so the two motions read as one gesture. Same shape
+    // as every other panel - ui/modal.js owns the exit animation and the
+    // removal.
     if (shell) shell.classList.remove('is-blurred');
-    backdrop.remove();
+    dismissModal(backdrop);
   }
 
   function showError(kind) {
@@ -682,20 +942,23 @@ function openNewPlaylistModal() {
       return;
     }
     busy = true;
-    createUserPlaylist(name, Date.now())
+    withSession(() => createPlaylist(name))
       .then(async () => {
         await refreshUserPlaylists();
         close();
       })
       .catch((err) => {
-        showError(err && err.message === 'exists' ? 'exists' : 'failed');
+        // 409 is the server's "that name is taken"; everything else is a
+        // failure the user can only retry.
+        showError(err && err.status === 409 ? 'exists' : 'failed');
         busy = false;
       });
   }
 
-  backdrop.addEventListener('click', (event) => {
-    if (event.target === backdrop) close();
-  });
+  // A press that starts AND ends on the dim area dismisses, and so does
+  // Escape. Not a click listener: iOS never synthesises a click for a tap on a
+  // plain <div>, which is why the old backdrop handler did nothing on a phone.
+  bindDismiss(backdrop, close);
   cancelBtn.addEventListener('click', close);
   createBtn.addEventListener('click', submit);
   input.addEventListener('keydown', (event) => {
@@ -733,7 +996,7 @@ function openAddSongDialog() {
 // still lists the new song.
 async function refreshLibrary(addedTrack) {
   try {
-    const library = await fetchLibrary();
+    const library = await withSession(() => fetchLibrary());
     await putTracks(library.tracks);
     store.setState({ tracks: library.tracks });
   } catch (error) {

@@ -50,6 +50,10 @@ function resolveDataDir() {
 
 export const DATA_DIR = resolveDataDir();
 export const libraryPath = path.join(DATA_DIR, 'library.json');
+// Playlists live in their OWN file, deliberately not inside library.json:
+// uploading a song and editing a playlist are separate read-modify-write
+// cycles, and sharing one file would let either one clobber the other.
+export const playlistsPath = path.join(DATA_DIR, 'playlists.json');
 export const mediaDir = path.join(DATA_DIR, 'media');
 export const coversDir = path.join(mediaDir, 'covers');
 
@@ -87,18 +91,14 @@ export async function readLibrary() {
 // atomic within a filesystem, so a reader sees either the old file or the new
 // one. The "same directory" part is load-bearing - a temp file in os.tmpdir()
 // would sit on a different filesystem, where rename degrades to copy+unlink.
-export async function writeLibraryAtomic(library) {
-  const payload = JSON.stringify(
-    {
-      tracks: Array.isArray(library?.tracks) ? library.tracks : [],
-      playlists: Array.isArray(library?.playlists) ? library.playlists : [],
-    },
-    null,
-    2
-  );
+//
+// Shared by every JSON file on the volume, so playlists.json gets exactly the
+// same durability guarantee as library.json without a second copy of this.
+async function writeJsonAtomic(targetPath, value, tmpPrefix) {
+  const payload = JSON.stringify(value, null, 2);
   const tmpPath = path.join(
-    path.dirname(libraryPath),
-    `.library.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    path.dirname(targetPath),
+    `.${tmpPrefix}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
   );
 
   let handle;
@@ -110,7 +110,7 @@ export async function writeLibraryAtomic(library) {
     await handle.sync();
     await handle.close();
     handle = undefined;
-    await fsp.rename(tmpPath, libraryPath);
+    await fsp.rename(tmpPath, targetPath);
   } catch (err) {
     if (handle) {
       try {
@@ -126,6 +126,55 @@ export async function writeLibraryAtomic(library) {
     }
     throw err;
   }
+}
+
+export async function writeLibraryAtomic(library) {
+  await writeJsonAtomic(
+    libraryPath,
+    {
+      tracks: Array.isArray(library?.tracks) ? library.tracks : [],
+      playlists: Array.isArray(library?.playlists) ? library.playlists : [],
+    },
+    'library'
+  );
+}
+
+// --- playlists read / write -------------------------------------------------
+
+// One playlist as it is allowed to exist on disk. Anything hand-edited into a
+// shape we cannot use is normalised here rather than defended against at every
+// call site; a row without a usable name is dropped outright.
+function normalisePlaylist(entry) {
+  const name = typeof entry?.name === 'string' ? entry.name.trim() : '';
+  if (!name) return null;
+  const trackIds = Array.isArray(entry?.trackIds)
+    ? entry.trackIds.filter((id) => typeof id === 'string' && id)
+    : [];
+  const createdAt = Number.isFinite(entry?.createdAt) ? entry.createdAt : 0;
+  return { name, trackIds, createdAt };
+}
+
+// Missing file is the normal state of a fresh volume, not an error: an empty
+// list is exactly right for "this user has never made a playlist".
+export async function readPlaylists() {
+  try {
+    const raw = await fsp.readFile(playlistsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed?.playlists) ? parsed.playlists : [];
+    return { playlists: list.map(normalisePlaylist).filter(Boolean) };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { playlists: [] };
+    throw err;
+  }
+}
+
+export async function writePlaylistsAtomic(data) {
+  const list = Array.isArray(data?.playlists) ? data.playlists : [];
+  await writeJsonAtomic(
+    playlistsPath,
+    { playlists: list.map(normalisePlaylist).filter(Boolean) },
+    'playlists'
+  );
 }
 
 // --- one-time seed ----------------------------------------------------------
@@ -265,11 +314,14 @@ export function pictureExtension(picture) {
 export default {
   DATA_DIR,
   libraryPath,
+  playlistsPath,
   mediaDir,
   coversDir,
   ensureStorage,
   readLibrary,
   writeLibraryAtomic,
+  readPlaylists,
+  writePlaylistsAtomic,
   seedFromBundleIfEmpty,
   fnv1aId,
   sniffContainer,

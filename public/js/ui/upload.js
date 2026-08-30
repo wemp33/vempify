@@ -2,14 +2,17 @@
 //
 // Mounted into #modal-root (a SIBLING of .app-shell) and built from the same
 // .modal-backdrop / .modal-card parts as playlist-picker.js and the
-// new-playlist modal, so it dismisses the same way: a tap on the dim area or
-// on the close button, with .app-shell.is-blurred softening everything behind.
+// new-playlist modal, so it dismisses the same way: a press on the dim area,
+// Escape, or the close button, with .app-shell.is-blurred softening
+// everything behind. Both of those - the dismissal and the exit animation -
+// come from ui/modal.js so all four panels behave identically.
 //
 // The transfer runs on XMLHttpRequest rather than fetch: only XHR reports
 // upload progress, and a 5-10MB file over a phone connection needs a real
 // percentage rather than a spinner that might mean anything.
 
 import { getLang } from '../i18n.js';
+import { bindDismiss, dismissModal } from './modal.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -348,7 +351,7 @@ export function openUploadDialog({ mount, t, onUploaded }) {
       inFlight.abort();
     }
     if (shell) shell.classList.remove('is-blurred');
-    backdrop.remove();
+    dismissModal(backdrop);
   }
 
   function showError(message) {
@@ -383,11 +386,11 @@ export function openUploadDialog({ mount, t, onUploaded }) {
     card.classList.toggle('is-uploading', busy);
   }
 
-  // Only a tap on the dim area itself dismisses; taps inside the card bubble
-  // up through backdrop but with a different target.
-  backdrop.addEventListener('click', (event) => {
-    if (event.target === backdrop) close();
-  });
+  // A press that both starts and ends on the dim area dismisses, and so does
+  // Escape. A press that starts inside the card does not, however far the
+  // finger travels before it lifts - dragging out of a half-filled form and
+  // losing it was the old handler's other failure.
+  bindDismiss(backdrop, close);
   closeBtn.addEventListener('click', close);
   cancelBtn.addEventListener('click', close);
 

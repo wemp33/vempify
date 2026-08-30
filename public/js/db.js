@@ -101,6 +101,17 @@ export function getPlayCounts() {
   return getAll('playcounts');
 }
 
+// ---------------------------------------------------------------------------
+// User playlists.
+//
+// These used to be where playlists LIVED; they now live on the server volume
+// (see js/sources/playlists.js) so every device sees the same ones. The store
+// below is kept deliberately: it is the source main.js migrates up on a
+// device's first run against the new API, and the fallback that still lists
+// something when the app opens with no connection. Nothing writes to it any
+// more, and nothing deletes from it - it is the only backup of lists that were
+// browser-local until the migration.
+
 export function getUserPlaylists() {
   return getAll('userPlaylists').then((playlists) =>
     playlists.sort((a, b) => a.createdAt - b.createdAt)

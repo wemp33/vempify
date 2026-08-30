@@ -1,6 +1,14 @@
 // Centered modal listing the user's playlists with a membership toggle per
 // row. Mounted into #modal-root, which lives OUTSIDE .app-shell so the
 // "is-blurred" class on the shell never blurs the modal itself.
+//
+// Opening and closing are shared: the enter animation comes from app.css
+// (any .modal-backdrop > .modal-card rises on insert), and the outside-tap
+// dismissal plus the exit animation come from ui/modal.js - see the long
+// comment there for why a plain click listener on the dim area was dead on
+// iOS and what replaced it.
+
+import { bindDismiss, dismissModal } from './modal.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -53,7 +61,9 @@ function checkCircle(checked) {
     const tick = document.createElementNS(SVG_NS, 'polyline');
     tick.setAttribute('points', '7.5,12.5 10.5,15.5 16.5,9');
     tick.style.fill = 'none';
-    tick.style.stroke = 'var(--bg)';
+    // The one colour that is guaranteed to read on the accent fill, whatever
+    // the accent is set to.
+    tick.style.stroke = 'var(--on-accent)';
     tick.style.strokeWidth = '2.5';
     tick.style.strokeLinecap = 'round';
     tick.style.strokeLinejoin = 'round';
@@ -75,15 +85,13 @@ export function openPlaylistPicker({ mount, track, playlists, isMember, onToggle
   const shell = document.querySelector('.app-shell');
 
   function close() {
+    // Unblur with the panel, not after it: the two motions have to read as one
+    // gesture, so the shell sharpens while the card is still on its way out.
     if (shell) shell.classList.remove('is-blurred');
-    backdrop.remove();
+    dismissModal(backdrop);
   }
 
-  // Only a tap on the dim area itself dismisses; taps inside the card bubble
-  // up through backdrop but with a different target.
-  backdrop.addEventListener('click', (event) => {
-    if (event.target === backdrop) close();
-  });
+  bindDismiss(backdrop, close);
 
   const header = document.createElement('div');
   header.className = 'modal-header';
@@ -147,7 +155,8 @@ export function openPlaylistPicker({ mount, track, playlists, isMember, onToggle
         busy = true;
         Promise.resolve(onToggle(playlist.name))
           .then((nowMember) => {
-            // The resolved value is the truth - render whatever db.js says.
+            // The resolved value is the truth - render whatever the server
+            // said the membership now is.
             const next = checkCircle(Boolean(nowMember));
             row.replaceChild(next, check);
             check = next;
