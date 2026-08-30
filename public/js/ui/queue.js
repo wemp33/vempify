@@ -12,7 +12,6 @@
 //
 // Dismissal and exit motion are shared with every other panel - ui/modal.js.
 
-import { getLang } from '../i18n.js';
 import { bindDismiss, dismissModal } from './modal.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -60,7 +59,7 @@ function crossIcon() {
 
 export function renderQueuePanel(mount, tracks, { onReorder, onRemove, onPlayIndex, onClose, t }) {
   const items = tracks.slice();
-  const labels = MOVE_LABELS[getLang()] || MOVE_LABELS.en;
+  const labels = MOVE_LABELS.en;
 
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';

@@ -1,6 +1,6 @@
 import { initDB, putTracks, getAllTracks, incrementPlayCount, getUserPlaylists } from './db.js';
 import { store } from './state.js';
-import { t, setLang, getLang } from './i18n.js';
+import { t } from './i18n.js';
 import { fetchLibrary, streamUrl } from './sources/local.js';
 import {
   listPlaylists,
@@ -192,7 +192,7 @@ async function boot() {
   // IndexedDB copies are the migration source and the offline fallback.
   const userPlaylists = online ? await syncPlaylists() : await getUserPlaylists();
 
-  store.setState({ tracks, userPlaylists, lang: getLang() });
+  store.setState({ tracks, userPlaylists });
 
   setupDom();
 
@@ -314,14 +314,6 @@ function setupDom() {
     });
   }
 
-  document.getElementById('lang-toggle')?.addEventListener('click', () => {
-    const newLang = getLang() === 'en' ? 'pl' : 'en';
-    setLang(newLang);
-    applyStaticI18n();
-    renderTrackList(displayedTracks);
-    store.setState({ lang: newLang });
-  });
-
   applyStaticI18n();
   selectPlaylist(null);
 }
@@ -368,12 +360,6 @@ function applyStaticI18n() {
   if (shuffleBtn) {
     const mode = store.getState().playMode;
     shuffleBtn.setAttribute('aria-label', mode === 'random' ? t('play_mode_random') : t('play_mode_order'));
-  }
-
-  const langToggleBtn = document.getElementById('lang-toggle');
-  if (langToggleBtn) {
-    langToggleBtn.setAttribute('title', t('language'));
-    langToggleBtn.textContent = getLang().toUpperCase();
   }
 
   const playPauseBtn = document.getElementById('play-pause');
@@ -860,7 +846,7 @@ async function deleteActivePlaylist(name) {
 
 function inlineMessage(kind) {
   const entry = INLINE_MESSAGES[kind] ?? INLINE_MESSAGES.failed;
-  return entry[getLang()] ?? entry.en;
+  return entry.en;
 }
 
 function openNewPlaylistModal() {

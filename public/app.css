@@ -211,7 +211,7 @@ button {
 
 /* The box is capped here rather than on the input, so the absolutely
    positioned icon always lines up with the field's left edge. The auto
-   margins centre it and still hold the lang toggle against the right. */
+   margins centre it and still hold the round buttons against the right. */
 .header-search {
   position: relative;
   flex: 1;
@@ -279,24 +279,6 @@ button {
   cursor: pointer;
 }
 
-.lang-toggle {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--tap);
-  min-height: var(--tap);
-  padding: 0 12px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: border-color var(--t-med), color var(--t-med), background var(--t-med);
-}
 
 /* ---------- sidebar + main ---------- */
 
@@ -1701,11 +1683,6 @@ button {
    ===================================================================== */
 
 @media (hover: hover) and (pointer: fine) {
-  .lang-toggle:hover {
-    border-color: var(--accent);
-    color: var(--text);
-    background: var(--accent-soft);
-  }
 
   .nav-item:hover,
   #sidebar .chip:hover {
@@ -1836,29 +1813,17 @@ button {
     max-width: none;
   }
 
-  /* Brand, the round buttons and the lang toggle share row 1; the buttons
-     hug the right edge. #add-song-btn is never hidden, so it is the one that
-     reliably carries the auto margin - the two controls after it must not
-     add a second gap of their own. The .lang-toggle / #queue-btn fallbacks
-     stay for the case where the add button is missing from the markup. */
-  .lang-toggle {
-    margin-left: auto;
-  }
-
-  #queue-btn {
-    margin-left: auto;
-  }
-
-  #queue-btn:not([hidden]) + .lang-toggle {
-    margin-left: 0;
-  }
-
+  /* Brand and the round buttons share row 1; the buttons hug the right edge.
+     Markup order is queue then add-song, so the "+" sits rightmost. #queue-btn
+     is hidden whenever the queue is empty, so BOTH need the auto margin and
+     add-song has to drop its own whenever queue is actually showing - or the
+     pair would be pushed apart by two auto gaps instead of one. */
+  #queue-btn,
   #add-song-btn {
     margin-left: auto;
   }
 
-  #add-song-btn ~ #queue-btn,
-  #add-song-btn ~ .lang-toggle {
+  #queue-btn:not([hidden]) ~ #add-song-btn {
     margin-left: 0;
   }
 

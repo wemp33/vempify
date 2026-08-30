@@ -13,7 +13,6 @@
 // absolutely positioned over the chip's right end (see .nav-tab in app.css),
 // which leaves every existing chip rule untouched.
 
-import { getLang } from '../i18n.js';
 import { bindDismiss, dismissModal } from './modal.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -29,7 +28,7 @@ const LOCAL_MESSAGES = {
 function local(key) {
   const entry = LOCAL_MESSAGES[key];
   if (!entry) return '';
-  return entry[getLang()] ?? entry.en;
+  return entry.en;
 }
 
 // ---------------------------------------------------------------------------

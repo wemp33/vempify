@@ -9,7 +9,6 @@ const state = {
   playMode: 'order', // 'order' | 'random'
   isPlaying: false,
   volume: 1,
-  lang: 'en',
 };
 
 const subscribers = new Set();

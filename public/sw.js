@@ -9,7 +9,7 @@
    the shared panel dismissal/exit motion (/js/ui/modal.js) - and carries the
    restyled CSS. A device still on v7 would serve the old main.js and the old
    app.css from cache and never see any of it. */
-const CACHE_NAME = 'vempify-shell-v8';
+const CACHE_NAME = 'vempify-shell-v9';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */
