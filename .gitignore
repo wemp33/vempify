@@ -4,3 +4,4 @@ media/*
 public-data/library.json
 .env
 .DS_Store
+.localdata/

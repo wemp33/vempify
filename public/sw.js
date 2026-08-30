@@ -1,8 +1,10 @@
-/* Bumped to v3 with the traced logo: a device holding the v2 shell would keep
-   serving the old placeholder mark from cache. The activate handler below
-   deletes every other vempify-shell-* cache, so the bump is what actually
-   retires the stale icons. */
-const CACHE_NAME = 'vempify-shell-v6';
+/* Bump this on every change to a precached file: a device holding the older
+   shell would otherwise keep serving it from cache. The activate handler
+   below deletes every other vempify-shell-* cache, so the bump is what
+   actually retires the stale copies.
+   v7 adds the add-song dialog (/js/ui/upload.js); an installed phone still on
+   v6 would fetch main.js from cache and fail to resolve the new import. */
+const CACHE_NAME = 'vempify-shell-v7';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */
@@ -23,6 +25,7 @@ const SHELL_PATHS = [
   '/js/ui/player.js',
   '/js/ui/swipe.js',
   '/js/ui/playlist-picker.js',
+  '/js/ui/upload.js',
   '/js/ui/queue.js',
   '/js/ui/nowplaying.js',
   '/js/ui/search.js',

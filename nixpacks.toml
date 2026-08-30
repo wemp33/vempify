@@ -1,0 +1,11 @@
+# ffmpeg is not in the default Nixpacks node image, and the upload endpoint
+# needs it: an ISO-BMFF upload is remuxed losslessly to a faststart MP4 before
+# it is stored, which is what stops fragmented MP4s reporting nonsense
+# durations in Safari. Without ffmpeg the upload still succeeds - it just
+# stores the original bytes - so this is a quality fix, not a hard dependency.
+#
+# The literal "..." is nixpacks' syntax for "keep the packages you would have
+# installed anyway" (node, npm). Dropping it would deploy an image with ffmpeg
+# and no Node runtime.
+[phases.setup]
+nixPkgs = ["...", "ffmpeg"]

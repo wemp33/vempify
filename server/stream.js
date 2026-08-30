@@ -1,14 +1,8 @@
 import { Router } from 'express';
-import { readFile } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.join(__dirname, '..');
-const libraryPath = path.join(projectRoot, 'public-data', 'library.json');
-const mediaDir = path.join(projectRoot, 'media');
+import { readLibrary, mediaDir } from './storage.js';
 
 const MIME_TYPES = {
   '.mp3': 'audio/mpeg',
@@ -23,8 +17,7 @@ const router = Router();
 router.get('/:id', async (req, res) => {
   let library;
   try {
-    const raw = await readFile(libraryPath, 'utf8');
-    library = JSON.parse(raw);
+    library = await readLibrary();
   } catch {
     res.status(404).json({ error: 'Library not found' });
     return;

@@ -1,28 +1,44 @@
 # Do not delete this file, and do not "simplify" it away.
 #
 # Our .gitignore excludes media/ and public-data/library.json on purpose - the
-# audio is the user's own, and it does not belong in a public git repo. But
-# those are exactly the files the deployed app needs: without them Railway
-# ships a working player with an empty library and no audio at all.
+# audio is the user's own, and it does not belong in a public git repo.
 #
-# CONFIRMED IN PRACTICE (railway CLI v5.23.2): .railwayignore does NOT override
-# .gitignore just by existing - `railway up` applies .gitignore rules on top of
-# it regardless. The only thing that actually stops that is passing
-# --no-gitignore on every deploy:
+# THE VOLUME CHANGED WHAT THIS MEANS. The library and all audio now live on the
+# Railway volume mounted at /data (see server/storage.js), which survives
+# deploys. media/ and public-data/ in the repo are no longer what the deployed
+# app reads - they are only a SEED, copied onto the volume once by
+# seedFromBundleIfEmpty() when the volume has no library.json yet.
 #
-#   railway up --no-gitignore
+# So, in practice:
 #
-# Forgetting that flag silently deploys an empty library with no audio and no
-# error of any kind - it looks like a successful deploy. Verify after every
-# deploy with: curl <url>/api/library (after logging in) and confirm it is not
+#   * First deploy onto a brand-new, empty volume - ship the seed data:
+#
+#       railway up --no-gitignore
+#
+#     (railway CLI v5.23.2 applies .gitignore rules on top of .railwayignore
+#     regardless of this file, so without that flag the gitignored media/ and
+#     public-data/library.json never leave your machine.)
+#
+#   * Every deploy after that - plain `railway up` is enough. The volume
+#     already holds the library and the audio, the seed is a no-op, and
+#     forgetting the flag no longer costs anything.
+#
+# Songs added through the app's own upload button go straight to the volume and
+# were never in the repo to begin with, so they are unaffected either way.
+#
+# Worth one check after the first deploy onto a fresh volume:
+# curl <url>/api/library (after logging in) and confirm it is not
 # {"tracks":[],"playlists":[]}.
 #
-# This file's own listed patterns (build junk, sample fixtures) still apply
-# normally on top of that flag.
+# This file's own listed patterns (build junk, sample fixtures) apply normally
+# on top of all of the above.
 
 node_modules
 .git
 .gitignore
+
+# Local data directory - the development stand-in for the volume. Never ship it.
+.localdata
 
 # Test fixtures - generated tones, not real library content.
 tools/sample

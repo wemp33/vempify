@@ -1016,10 +1016,10 @@ button {
 }
 
 /* =====================================================================
-   Queue header button + count badge
+   Round header buttons (#add-song-btn, #queue-btn) + the queue count badge
    ===================================================================== */
 
-.queue-btn {
+.header-btn {
   position: relative;
   flex-shrink: 0;
   display: inline-flex;
@@ -1035,9 +1035,16 @@ button {
   cursor: pointer;
 }
 
-.queue-btn .icon {
+.header-btn .icon {
   width: 20px;
   height: 20px;
+}
+
+/* The plus is the app's one "make something new" affordance up here, so it
+   reads in the accent rather than as another muted glyph. */
+#add-song-btn {
+  color: var(--accent-2);
+  border-color: var(--accent);
 }
 
 .queue-count {
@@ -1188,11 +1195,164 @@ button {
   cursor: pointer;
 }
 
+/* All three sit inside .modal-actions on purpose: the generic
+   ".modal-actions button" rule above is more specific than a lone class, so a
+   bare .modal-btn--primary would lose its fill to the transparent default. */
 .modal-actions button.primary,
-.modal-actions .btn-primary {
+.modal-actions .btn-primary,
+.modal-actions .modal-btn--primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
+}
+
+.modal-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The header can carry a second line (the picker names the track); the text
+   column has to be allowed to shrink or the close button gets pushed out. */
+.modal-headings {
+  min-width: 0;
+}
+
+.modal-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* Inline refusal line, shared by every modal that can reject what was typed.
+   The palette holds no red, so the accent bar - not a colour the rest of the
+   app never uses - is what marks it as something to read. */
+.modal-error {
+  margin-top: 12px;
+  padding: 9px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+/* =====================================================================
+   Add-song dialog
+   ===================================================================== */
+
+/* A form, not a list: 70vh would park the Upload button below the fold on a
+   phone as soon as the error line appears. 100% resolves against the
+   backdrop's content box - the viewport minus its safe-area padding - so the
+   card grows to whatever is actually free and only scrolls beyond that. */
+.upload-dialog {
+  max-width: 380px;
+  max-height: 100%;
+}
+
+/* Parked off-screen rather than display:none - a display:none input is
+   skipped by some engines when .click() is called on it - and out of the tab
+   order, because the visible button above owns the interaction. */
+.upload-file__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  pointer-events: none;
+}
+
+.upload-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--tap);
+  margin-top: 4px;
+  padding: 0 16px;
+  background: var(--surface-2);
+  /* dashed, like the empty-state box: this is a drop slot, not an action */
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--t-med), background var(--t-med);
+}
+
+.upload-file__icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--accent-2);
+}
+
+.upload-filename {
+  margin: 8px 2px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.upload-filename.is-empty {
+  color: var(--faint);
+}
+
+.upload-label {
+  display: block;
+  margin: 14px 2px 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.upload-progress {
+  height: 6px;
+  margin-top: 16px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+}
+
+.upload-progress__bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  border-radius: var(--radius-pill);
+  transition: width 120ms linear;
+}
+
+.upload-status {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.upload-dialog input:disabled,
+.upload-dialog button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* No press dip while the transfer runs - every control is inert. */
+.upload-dialog.is-uploading .pressable:active {
+  transform: none;
+  opacity: 0.55;
 }
 
 /* =====================================================================
@@ -1334,10 +1494,28 @@ button {
     background: var(--surface-hover);
   }
 
-  .queue-btn:hover {
+  .header-btn:hover {
     border-color: var(--accent);
     color: var(--text);
     background: var(--accent-soft);
+  }
+
+  #add-song-btn:hover {
+    color: var(--text);
+  }
+
+  .upload-file:hover {
+    border-color: var(--accent);
+    background: var(--surface-hover);
+  }
+
+  .modal-actions .modal-btn:hover {
+    border-color: var(--accent);
+  }
+
+  .modal-actions .modal-btn--primary:hover {
+    background: var(--accent-2);
+    border-color: var(--accent-2);
   }
 
   .modal-close:hover {
@@ -1395,10 +1573,11 @@ button {
     max-width: none;
   }
 
-  /* Brand, queue button and lang toggle share row 1; the buttons hug the
-     right edge. When #queue-btn is hidden (empty queue) its auto margin
-     vanishes with it, so the lang toggle carries a fallback auto margin
-     that the visible queue button cancels via the sibling selector. */
+  /* Brand, the round buttons and the lang toggle share row 1; the buttons
+     hug the right edge. #add-song-btn is never hidden, so it is the one that
+     reliably carries the auto margin - the two controls after it must not
+     add a second gap of their own. The .lang-toggle / #queue-btn fallbacks
+     stay for the case where the add button is missing from the markup. */
   .lang-toggle {
     margin-left: auto;
   }
@@ -1408,6 +1587,15 @@ button {
   }
 
   #queue-btn:not([hidden]) + .lang-toggle {
+    margin-left: 0;
+  }
+
+  #add-song-btn {
+    margin-left: auto;
+  }
+
+  #add-song-btn ~ #queue-btn,
+  #add-song-btn ~ .lang-toggle {
     margin-left: 0;
   }
 
@@ -1565,6 +1753,12 @@ button {
 @media (max-width: 360px) {
   .wordmark {
     display: none;
+  }
+
+  /* Three controls now share row 1 with the logo tile - the wide gap would
+     push the lang toggle past the safe-area edge. */
+  .app-header {
+    gap: 10px;
   }
 
   .now-playing-content {

@@ -12,6 +12,7 @@ import { t, setLang, getLang } from './i18n.js';
 import { fetchLibrary, streamUrl } from './sources/local.js';
 import { attachSwipe } from './ui/swipe.js';
 import { openPlaylistPicker } from './ui/playlist-picker.js';
+import { openUploadDialog } from './ui/upload.js';
 import { renderQueuePanel, updateQueueBadge } from './ui/queue.js';
 import { renderTabs } from './ui/sidebar.js';
 import { renderNowPlaying } from './ui/nowplaying.js';
@@ -20,11 +21,13 @@ import { renderSearch } from './ui/search.js';
 
 const HISTORY_CAP = 50;
 
-// The "+" modal needs two messages the shared i18n key set does not carry.
+// Messages the shared i18n key set does not carry: the "+" modal's three
+// validation lines, plus the toast that confirms an uploaded song landed.
 const INLINE_MESSAGES = {
   empty: { en: 'Enter a name', pl: 'Wpisz nazwę' },
   exists: { en: 'That name is already taken', pl: 'Ta nazwa jest już zajęta' },
-  failed: { en: 'Could not create the playlist', pl: 'Nie udało się utworzyć playlisty' }
+  failed: { en: 'Could not create the playlist', pl: 'Nie udało się utworzyć playlisty' },
+  song_added: { en: 'Song added', pl: 'Dodano utwór' }
 };
 
 let sidebarEl = null;
@@ -32,6 +35,7 @@ let searchInput = null;
 let mainEl = null;
 let modalRoot = null;
 let queueBtn = null;
+let addSongBtn = null;
 let nowPlayingInfoEl = null;
 let player = null;
 
@@ -94,6 +98,7 @@ function setupDom() {
   mainEl = document.getElementById('main');
   modalRoot = document.getElementById('modal-root');
   queueBtn = document.getElementById('queue-btn');
+  addSongBtn = document.getElementById('add-song-btn');
   nowPlayingInfoEl = document.querySelector('#now-playing .now-playing-track');
 
   player = createPlayer({
@@ -116,6 +121,7 @@ function setupDom() {
   document.getElementById('next-btn')?.addEventListener('click', () => player.next());
   document.getElementById('shuffle-btn')?.addEventListener('click', togglePlayMode);
   queueBtn?.addEventListener('click', openQueuePanel);
+  addSongBtn?.addEventListener('click', openAddSongDialog);
 
   const seekInput = document.getElementById('seek');
   seekInput?.addEventListener('input', () => {
@@ -179,6 +185,11 @@ function applyStaticI18n() {
   document.getElementById('next-btn')?.setAttribute('aria-label', t('next'));
   document.getElementById('volume')?.setAttribute('aria-label', t('volume'));
   queueBtn?.setAttribute('aria-label', t('queue'));
+
+  if (addSongBtn) {
+    addSongBtn.setAttribute('aria-label', t('add_song'));
+    addSongBtn.title = t('add_song');
+  }
 
   const shuffleBtn = document.getElementById('shuffle-btn');
   if (shuffleBtn) {
@@ -697,6 +708,49 @@ function openNewPlaylistModal() {
   modalRoot.appendChild(backdrop);
   if (shell) shell.classList.add('is-blurred');
   input.focus();
+}
+
+// ---------------------------------------------------------------------------
+// Adding a song
+
+function openAddSongDialog() {
+  if (!modalRoot || modalRoot.childElementCount > 0) return;
+
+  openUploadDialog({
+    mount: modalRoot,
+    t,
+    onUploaded: (track) => {
+      showToast(inlineMessage('song_added'));
+      refreshLibrary(track);
+    }
+  });
+}
+
+// The server owns the library, so the stored track comes back by re-reading
+// /api/library rather than being spliced in from the response alone: the
+// duration it parsed and the cover it extracted are facts only the server
+// has. IndexedDB is rewritten alongside the store so a later offline start
+// still lists the new song.
+async function refreshLibrary(addedTrack) {
+  try {
+    const library = await fetchLibrary();
+    await putTracks(library.tracks);
+    store.setState({ tracks: library.tracks });
+  } catch (error) {
+    if (isUnauthorized(error)) {
+      window.location.replace('/login');
+      return;
+    }
+    // The upload itself landed - only the re-read failed. Fall back to the
+    // track object the server returned so the row still appears.
+    if (addedTrack && addedTrack.id && !trackById(addedTrack.id)) {
+      store.setState({ tracks: store.getState().tracks.concat(addedTrack) });
+    }
+  }
+
+  // Show the list the new song is actually in: a playlist tab or a live
+  // search would otherwise hide it behind a filter the user has to clear.
+  selectPlaylist(null);
 }
 
 // ---------------------------------------------------------------------------

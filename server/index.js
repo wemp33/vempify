@@ -3,10 +3,20 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import libraryRouter from './library.js';
 import streamRouter from './stream.js';
+import tracksRouter from './tracks.js';
 import { authRouter, requireAuth } from './auth.js';
+import { DATA_DIR, coversDir, ensureStorage, seedFromBundleIfEmpty } from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
+
+// Everything mutable lives in the data directory - a mounted volume on Railway,
+// .localdata/ during development. Both calls run before the first request can
+// arrive: the directories must exist, and a brand-new volume gets the repo's
+// bundled library and audio copied into it exactly once.
+ensureStorage();
+seedFromBundleIfEmpty();
+console.log(`[vempify] data directory: ${DATA_DIR}`);
 
 const app = express();
 
@@ -26,7 +36,7 @@ app.use(express.static(path.join(projectRoot, 'public')));
 // be parked in a shared proxy cache.
 app.use(
   '/covers',
-  express.static(path.join(projectRoot, 'media', 'covers'), {
+  express.static(coversDir, {
     index: false,
     dotfiles: 'ignore',
     setHeaders(res) {
@@ -36,6 +46,9 @@ app.use(
 );
 
 app.use('/api', libraryRouter);
+// Upload and delete. Behind requireAuth like everything else under /api, and
+// the only place a raw body parser is mounted.
+app.use('/api', tracksRouter);
 app.use('/audio', streamRouter);
 
 const PORT = process.env.PORT || 3000;

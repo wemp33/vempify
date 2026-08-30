@@ -11,9 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "express": "^5.2.1"
-  },
-  "devDependencies": {
+    "express": "^5.2.1",
     "music-metadata": "^11.15.0"
   },
   "type": "module"
