@@ -23,6 +23,61 @@
   <link rel="icon" href="/icons/icon-32.png" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="/icons/icon-180.png" sizes="180x180" />
   <link rel="stylesheet" href="/app.css" />
+  <script>
+    /* Self-heal a stale shell.
+
+       Navigations are network-first, so THIS markup is always current - but a
+       service worker that failed to update can go on serving an old app.css
+       and old modules from its cache, and new markup styled by an old
+       stylesheet is silently broken (it is how the header buttons ended up
+       clumped beside the wordmark). A version stamped into the CSS is the only
+       way the fresh half can tell the stale half apart. On a mismatch: drop
+       every cache, unregister the workers, reload once.
+
+       A script placed after the stylesheet link waits for it, so the value is
+       readable here. The sessionStorage flag is what stops a reload loop if the
+       fresh CSS somehow still does not match. */
+    (function () {
+      var BUILD = '12';
+      try {
+        if (sessionStorage.getItem('vempify-shell-rebuilt') === BUILD) return;
+
+        /* A stylesheet that did not load at all reports no rules - offline, or
+           a failed fetch. Clearing the caches there would destroy the offline
+           shell to fix nothing, so only judge a stylesheet that actually
+           parsed. link.sheet is non-null exactly then, and is readable because
+           the file is same-origin. */
+        var link = document.querySelector('link[rel="stylesheet"][href*="app.css"]');
+        if (!link || !link.sheet) return;
+
+        /* An ABSENT stamp is the common stale case, not a reason to skip: every
+           build before this check existed has no --build at all. Treat missing
+           and mismatched the same. */
+        var stamped = getComputedStyle(document.documentElement)
+          .getPropertyValue('--build')
+          .trim()
+          .replace(/^["']|["']$/g, '');
+        if (stamped === BUILD) return;
+        sessionStorage.setItem('vempify-shell-rebuilt', BUILD);
+        var reload = function () { location.reload(); };
+        var jobs = [];
+        if (window.caches) {
+          jobs.push(caches.keys().then(function (names) {
+            return Promise.all(names.map(function (n) { return caches.delete(n); }));
+          }));
+        }
+        if (navigator.serviceWorker) {
+          jobs.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }));
+        }
+        Promise.all(jobs).then(reload, reload);
+      } catch (e) {
+        /* sessionStorage throws in some privacy modes - skip the check rather
+           than risk reloading on every single load. */
+      }
+    })();
+  </script>
 </head>
 <body>
   <div class="app-shell">

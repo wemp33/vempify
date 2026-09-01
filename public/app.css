@@ -4,6 +4,12 @@
    ===================================================================== */
 
 :root {
+  /* Read by the self-heal check in index.html's <head>. Bump this and the
+     BUILD constant there together on any change to a precached asset - if they
+     disagree, the page is being styled by a stale cached stylesheet and clears
+     itself. */
+  --build: 12;
+
   /* --- contract palette --- */
   --bg: #0b0b0f;
   --surface: #16161d;

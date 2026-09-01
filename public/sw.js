@@ -13,7 +13,7 @@
    would keep the cached module that never sets navigator.mediaSession
    .playbackState, so its lock screen would go on dropping the Now Playing card
    the moment a song is paused - the exact bug this bump ships the fix for. */
-const CACHE_NAME = 'vempify-shell-v11';
+const CACHE_NAME = 'vempify-shell-v12';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */
