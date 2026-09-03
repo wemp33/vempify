@@ -41,7 +41,19 @@ const strings = {
   upload_duplicate: 'That song is already in your library',
   upload_bad_format: 'That file is not an audio format Vempify can read',
   delete_song: 'Delete song',
-  confirm_delete: 'Remove this song from your library?',
+  // Reads as the mirror of confirm_delete_playlist above, and says the part
+  // that is easy to get wrong: this one does take the audio, everywhere.
+  confirm_delete: 'Delete this song? It leaves your library and every playlist it is in.',
+  // The song panel (ui/song-panel.js): editing a track's details, and the two
+  // ways that panel can be refused. song_title/song_artist/save/cancel/
+  // delete_song/confirm_delete above are shared with the add-song dialog and
+  // the playlist dialogs - only the wording those do not already carry is new.
+  edit_details: 'Edit details',
+  delete: 'Delete',
+  saving: 'Saving…',
+  song_details_required: 'Fill in the title and the artist',
+  save_failed: 'Could not save the changes',
+  delete_song_failed: 'Could not delete the song',
 };
 
 export function t(key) {

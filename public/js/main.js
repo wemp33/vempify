@@ -1,7 +1,7 @@
 import { initDB, putTracks, getAllTracks, incrementPlayCount, getUserPlaylists } from './db.js';
 import { store } from './state.js';
 import { t } from './i18n.js';
-import { fetchLibrary, streamUrl } from './sources/local.js';
+import { fetchLibrary, streamUrl, updateTrack, deleteTrack } from './sources/local.js';
 import {
   listPlaylists,
   createPlaylist,
@@ -10,7 +10,7 @@ import {
   toggleTrack
 } from './sources/playlists.js';
 import { attachSwipe } from './ui/swipe.js';
-import { openPlaylistPicker } from './ui/playlist-picker.js';
+import { openSongPanel } from './ui/song-panel.js';
 import { openUploadDialog } from './ui/upload.js';
 import { renderQueuePanel, updateQueueBadge } from './ui/queue.js';
 import { renderTabs } from './ui/sidebar.js';
@@ -35,12 +35,15 @@ const DEVICE_TOKEN_KEY = 'vempify_device_token';
 const MIGRATION_KEY = 'vempify_playlists_migrated';
 
 // Messages the shared i18n key set does not carry: the "+" modal's three
-// validation lines, plus the toast that confirms an uploaded song landed.
+// validation lines, the toast that confirms an uploaded song landed, and the
+// bottom bar's idle text - which index.html hard-codes into the initial markup,
+// so this is the same wording repeated rather than a new string.
 const INLINE_MESSAGES = {
   empty: { en: 'Enter a name', pl: 'Wpisz nazwę' },
   exists: { en: 'That name is already taken', pl: 'Ta nazwa jest już zajęta' },
   failed: { en: 'Could not create the playlist', pl: 'Nie udało się utworzyć playlisty' },
-  song_added: { en: 'Song added', pl: 'Dodano utwór' }
+  song_added: { en: 'Song added', pl: 'Dodano utwór' },
+  not_playing: { en: 'Not playing', pl: 'Nic nie gra' }
 };
 
 let sidebarEl = null;
@@ -329,6 +332,10 @@ function updateRangeFill(input) {
 function handleTimeUpdate(currentTime, duration) {
   const seekInput = document.getElementById('seek');
   if (!seekInput || document.activeElement === seekInput) return;
+  // Nothing is loaded: the song was deleted and forgetTrack has already zeroed
+  // the scrubber. A trailing timeupdate from the emptying element must not
+  // repaint a position and a length for a track that is gone.
+  if (!currentTrackId) return;
   seekInput.max = String(duration || 0);
   seekInput.value = String(currentTime || 0);
   updateRangeFill(seekInput);
@@ -542,7 +549,7 @@ function renderTrackList(tracks) {
     // never also plays the row.
     attachSwipe(item, {
       onRight: () => addToQueue(track.id),
-      onLeft: () => openPickerFor(track)
+      onLeft: () => openSongPanelFor(track)
     });
 
     list.appendChild(item);
@@ -763,12 +770,16 @@ function openQueuePanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Playlists: picker (swipe left) and the "+" creation modal
+// The song panel (swipe left) and the "+" playlist creation modal
+//
+// One panel owns everything you can do TO a song: which playlists it belongs
+// to, editing its title and artist, and deleting it. Swiping a row left is the
+// only way in.
 
-function openPickerFor(track) {
+function openSongPanelFor(track) {
   if (!modalRoot || modalRoot.childElementCount > 0) return;
 
-  openPlaylistPicker({
+  openSongPanel({
     mount: modalRoot,
     track,
     playlists: store.getState().userPlaylists,
@@ -785,8 +796,162 @@ function openPickerFor(track) {
       if (state.activePlaylist === name && !isSearching()) renderActiveList();
       return nowMember;
     },
+    // The panel has already trimmed and rejected empty fields; anything that
+    // rejects here is the server's word, and it carries .status/.message so the
+    // panel can put it inline and keep the user in the edit view.
+    onSave: async ({ title, artist }) => {
+      const updated = await withSession(() => updateTrack(track.id, { title, artist }));
+
+      const status = await reloadLibrary();
+      if (status === 'unauthorized') return;
+      if (status === 'stale' && updated && updated.id) {
+        // The PATCH landed and only the re-read failed. Splice the server's own
+        // response into the store so the row still shows what was saved.
+        store.setState({
+          tracks: store.getState().tracks.map((tr) => (tr.id === updated.id ? updated : tr))
+        });
+      }
+
+      repaintCurrentList();
+
+      // The id never changes on an edit (it names the file on disk), so the
+      // element goes on playing the same audio - only what is DISPLAYED has to
+      // catch up. The bottom bar repaints itself off the store on every
+      // notification; the lock screen does not, because nothing started a track.
+      if (currentTrackId === track.id) {
+        player.refreshMetadata(trackById(track.id));
+      }
+    },
+    onDelete: async () => {
+      await withSession(() => deleteTrack(track.id));
+
+      // Drop every client-side reference BEFORE the re-read, so no render in
+      // between can try to play or highlight a song that is gone.
+      forgetTrack(track.id);
+
+      const status = await reloadLibrary();
+      if (status === 'unauthorized') return;
+      if (status === 'stale') {
+        // The DELETE landed; only the re-read failed. Remove the row locally so
+        // the library on screen matches the one on the server.
+        store.setState({
+          tracks: store.getState().tracks.filter((tr) => tr.id !== track.id)
+        });
+      }
+
+      // The server has already pulled the id out of every playlist it was in -
+      // this just collects the corrected lists.
+      await refreshUserPlaylists();
+
+      repaintCurrentList();
+    },
     t
   });
+}
+
+// Repaints whatever #main is currently showing, against the current store.
+// A live search cannot simply be re-rendered from its last results - those are
+// the track objects as they were before the edit - so the query is re-run
+// instead; renderSearch reads the library through a getter, so one synthetic
+// input event is the whole refresh.
+function repaintCurrentList() {
+  if (isSearching()) {
+    searchInput.dispatchEvent(new Event('input'));
+  } else {
+    renderActiveList();
+  }
+}
+
+// Everything the client still remembers about a track that no longer exists.
+//
+// The deleted song may be the one in the speakers, and the choice made here is
+// to STOP rather than auto-advance. Deleting is library management, not a
+// transport gesture: having the app start some other song because a button in a
+// panel was tapped is surprising, and on a phone it is loud. It is also the
+// state that is trivial to reason about - no index arithmetic gets to decide
+// what plays next, the bottom bar goes back to its idle text, and the next tap
+// on any row behaves exactly as it always does.
+function forgetTrack(id) {
+  const state = store.getState();
+  const wasCurrent = currentTrackId === id;
+
+  // The queue deliberately allows duplicates, so filter rather than splice one.
+  // History goes the same way, which is what stops prev from resurrecting it.
+  const patch = {
+    queue: state.queue.filter((tid) => tid !== id),
+    history: state.history.filter((tid) => tid !== id),
+    context: state.context.filter((tid) => tid !== id)
+  };
+
+  // Keep the context cursor on the same SONG it was on, now that the ids around
+  // it have shifted down.
+  const cursorId =
+    state.contextIndex >= 0 && state.contextIndex < state.context.length
+      ? state.context[state.contextIndex]
+      : null;
+  if (cursorId === id) {
+    // The cursor was on the deleted song: park it just BEFORE the slot that
+    // song vacated, so a later "next" plays whatever followed it. -1 is a legal
+    // cursor - it means "nothing playing", and advance() then starts at 0.
+    patch.contextIndex = state.contextIndex - 1;
+  } else if (cursorId === null) {
+    patch.contextIndex = -1;
+  } else {
+    patch.contextIndex = patch.context.indexOf(cursorId);
+  }
+
+  if (wasCurrent) {
+    // Not pause() - unload(). A paused element still holds the deleted file as
+    // its source, which leaves the scrubber sitting at a position inside it and
+    // the lock-screen card offering to play it back; both would be the app
+    // claiming a song it no longer has.
+    player.unload();
+    currentTrackId = null;
+    // The 'pause' event reports this too, but only on the next task; saying it
+    // now keeps the render that this patch triggers from painting a play state
+    // for a track that no longer exists.
+    patch.isPlaying = false;
+  }
+
+  store.setState(patch);
+
+  // After the render, not before: renderNowPlaying leaves the bar alone when
+  // there is no track (playback survives list switches), so the idle text has
+  // to be written here.
+  if (wasCurrent) resetNowPlayingBar();
+}
+
+// Puts the bottom bar back to the state index.html ships it in.
+function resetNowPlayingBar() {
+  if (nowPlayingInfoEl) {
+    nowPlayingInfoEl.innerHTML = '';
+
+    const meta = document.createElement('div');
+    meta.className = 'now-playing-meta';
+
+    const title = document.createElement('div');
+    title.id = 'now-playing-title';
+    title.className = 'now-playing-title';
+    title.textContent = inlineMessage('not_playing');
+
+    const artist = document.createElement('div');
+    artist.id = 'now-playing-artist';
+    artist.className = 'now-playing-artist';
+    artist.textContent = '—';
+
+    meta.appendChild(title);
+    meta.appendChild(artist);
+    nowPlayingInfoEl.appendChild(meta);
+  }
+
+  const seekInput = document.getElementById('seek');
+  if (seekInput) {
+    // max 0 as well as value 0: a scrubber that can still be dragged over a
+    // song that is gone is the one part of the bar that would look alive.
+    seekInput.max = '0';
+    seekInput.value = '0';
+    updateRangeFill(seekInput);
+  }
 }
 
 // Pulls the server's list into the store. The extra patch rides along in the
@@ -975,26 +1140,38 @@ function openAddSongDialog() {
   });
 }
 
-// The server owns the library, so the stored track comes back by re-reading
-// /api/library rather than being spliced in from the response alone: the
-// duration it parsed and the cover it extracted are facts only the server
+// The server owns the library, so every change to it is followed by a re-read
+// of /api/library rather than by patching the store from the response alone:
+// the duration it parsed and the cover it extracted are facts only the server
 // has. IndexedDB is rewritten alongside the store so a later offline start
-// still lists the new song.
-async function refreshLibrary(addedTrack) {
+// lists the same songs.
+//
+// Returns 'ok', 'stale' (the change landed but this read did not - the caller
+// decides what to show meanwhile) or 'unauthorized' (the session is gone and
+// the gate is already loading; the caller should just stop).
+async function reloadLibrary() {
   try {
     const library = await withSession(() => fetchLibrary());
     await putTracks(library.tracks);
     store.setState({ tracks: library.tracks });
+    return 'ok';
   } catch (error) {
     if (isUnauthorized(error)) {
       window.location.replace('/login');
-      return;
+      return 'unauthorized';
     }
-    // The upload itself landed - only the re-read failed. Fall back to the
-    // track object the server returned so the row still appears.
-    if (addedTrack && addedTrack.id && !trackById(addedTrack.id)) {
-      store.setState({ tracks: store.getState().tracks.concat(addedTrack) });
-    }
+    return 'stale';
+  }
+}
+
+async function refreshLibrary(addedTrack) {
+  const status = await reloadLibrary();
+  if (status === 'unauthorized') return;
+
+  // The upload itself landed - only the re-read failed. Fall back to the
+  // track object the server returned so the row still appears.
+  if (status === 'stale' && addedTrack && addedTrack.id && !trackById(addedTrack.id)) {
+    store.setState({ tracks: store.getState().tracks.concat(addedTrack) });
   }
 
   // Show the list the new song is actually in: a playlist tab or a live

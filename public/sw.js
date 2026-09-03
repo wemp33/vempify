@@ -12,8 +12,12 @@
    v10 carries the media-session fix in /js/ui/player.js: a phone still on v9
    would keep the cached module that never sets navigator.mediaSession
    .playbackState, so its lock screen would go on dropping the Now Playing card
-   the moment a song is paused - the exact bug this bump ships the fix for. */
-const CACHE_NAME = 'vempify-shell-v12';
+   the moment a song is paused - the exact bug this bump ships the fix for.
+   v13 replaces /js/ui/playlist-picker.js with /js/ui/song-panel.js, the panel
+   that now also edits and deletes a song. A device still on v12 would serve the
+   cached main.js, whose import of the old path no longer matches the module the
+   app ships - and would have no copy of the new one to fall back on offline. */
+const CACHE_NAME = 'vempify-shell-v13';
 
 /* Every path here must actually exist under public/ - a 404 in the precache
    would otherwise poison the install. */
@@ -36,7 +40,7 @@ const SHELL_PATHS = [
   '/js/ui/player.js',
   '/js/ui/rowicons.js',
   '/js/ui/swipe.js',
-  '/js/ui/playlist-picker.js',
+  '/js/ui/song-panel.js',
   '/js/ui/upload.js',
   '/js/ui/queue.js',
   '/js/ui/nowplaying.js',

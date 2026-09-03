@@ -57,6 +57,12 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
   });
   audio.addEventListener('pause', () => {
     if (primingToken) return;
+    // unload() empties the element, and emptying it pauses it. That pause
+    // event is delivered a task later, by which time there is nothing loaded
+    // for it to describe - and the handler below would put the platform back to
+    // 'paused', re-raising the lock-screen card for a song that was just
+    // deleted. currentTrack is null in exactly that window and no other.
+    if (!currentTrack) return;
     if (onPlayStateChange) onPlayStateChange(false);
     // A paused session has to keep announcing itself. iOS infers "there is media
     // here" from an element that is actually playing; the instant it pauses,
@@ -279,6 +285,52 @@ export function createPlayer({ onTimeUpdate, onEnded, onPlayStateChange } = {}) 
       setMediaSessionMetadata(track);
       registerMediaSessionHandlers();
       attemptPlayback();
+    },
+    // The lock-screen card is stamped when a track starts, which is normally
+    // the only moment its details can change. Editing a song's title or artist
+    // is the exception: the id, the file and this element are all untouched, so
+    // no play() happens to re-stamp it and the card would keep the old name
+    // until the next song. main.js calls this instead. Inert unless the track
+    // handed in IS the loaded one, so an edit to some other song can never
+    // conjure a Now Playing card for something nobody started.
+    refreshMetadata(track) {
+      if (!track || !currentTrack || track.id !== currentTrack.id) return;
+      currentTrack = track;
+      setMediaSessionMetadata(track);
+    },
+    // The loaded song no longer exists - it was deleted out from under the
+    // player. Pausing alone is not enough: the element would keep the dead src,
+    // so the scrubber would go on reporting a position into a file the server
+    // has dropped, and the lock-screen card would keep offering a play button
+    // whose only possible outcome is a 404. This puts the session back to the
+    // state it boots in - nothing loaded, no card, 'none' - which is the one
+    // honest description of it.
+    unload() {
+      // Cleared FIRST: the pause below is delivered asynchronously, and the
+      // 'pause' handler reads this to know the event describes nothing.
+      currentTrack = null;
+      try {
+        audio.pause();
+      } catch {
+        /* nothing to pause */
+      }
+      // removeAttribute + load(), never src = ''. An empty string resolves
+      // against the document URL, so the element would fetch the PAGE and
+      // raise a decode error on the HTML it got back.
+      audio.removeAttribute('src');
+      try {
+        audio.load();
+      } catch {
+        /* best effort - the element is already empty */
+      }
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = null;
+        } catch {
+          /* MediaMetadata unsupported in this browser */
+        }
+      }
+      setPlaybackState('none');
     },
     pause() {
       audio.pause();

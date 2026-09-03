@@ -8,7 +8,7 @@
      BUILD constant there together on any change to a precached asset - if they
      disagree, the page is being styled by a stale cached stylesheet and clears
      itself. */
-  --build: 12;
+  --build: 13;
 
   /* --- contract palette --- */
   --bg: #0b0b0f;
@@ -1266,7 +1266,7 @@ button {
 /* ---------- panel motion ----------
    Every panel in the app is a .modal-backdrop wrapping a .modal-card, so the
    enter animation is attached to the shape rather than to any one module: the
-   queue panel, the playlist picker, the upload dialog, the new-playlist modal
+   queue panel, the song panel, the upload dialog, the new-playlist modal
    and the rename/confirm dialogs all rise the same way with no JS at all.
    Leaving is the half that needs code, because a removed node cannot animate -
    ui/modal.js adds .is-closing, waits, then removes.
@@ -1601,8 +1601,19 @@ button {
 }
 
 /* =====================================================================
-   Playlist picker rows + membership check circles
+   Song panel: playlist rows + membership check circles, then the foot
+   (ui/song-panel.js - one card for everything you can do to one song)
    ===================================================================== */
+
+/* The default view is a list and 70vh suits it, but the edit view is a form,
+   and the same problem the upload dialog has applies: two labelled fields plus
+   an error line plus the buttons do not fit in 70vh on a short phone, and Save
+   ends up below the fold. 100% resolves against the backdrop's content box -
+   the viewport minus its safe-area padding - so the card takes what is free
+   and only scrolls past that. */
+.song-panel {
+  max-height: 100%;
+}
 
 .picker-list {
   list-style: none;
@@ -1665,6 +1676,66 @@ button {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
+}
+
+/* ---------- the foot: edit details / delete song ----------
+   Below a rule, because these two are not more playlists: one hairline is
+   enough to say "the list ended, these are about the song itself". */
+
+.song-foot {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* Deliberately the same shape as .picker-row - full width, one icon, one
+   label - so the foot reads as a continuation of the panel rather than a
+   toolbar bolted underneath it. */
+.song-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px 4px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.song-action__icon {
+  flex-shrink: 0;
+}
+
+.song-action__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The palette holds no red, so "this one is destructive" is said the way the
+   destructive confirm button says it: in --accent-2. The glyph is drawn with
+   stroke:currentColor, so it turns with the label and needs no rule. */
+.song-action--danger {
+  color: var(--accent-2);
+}
+
+/* The confirmation that replaces the foot on the first Delete tap. .modal-hint
+   centres its text and pads for a standalone line; here it is a question above
+   two buttons, in a column of left-aligned rows. */
+.song-confirm__text {
+  padding: 12px 2px 2px;
+  text-align: left;
+}
+
+.song-confirm__name {
+  padding: 0 2px;
 }
 
 /* =====================================================================
@@ -1784,7 +1855,8 @@ button {
     background: var(--surface-hover);
   }
 
-  .picker-row:hover {
+  .picker-row:hover,
+  .song-action:hover {
     background: var(--surface-hover);
   }
 

@@ -1,7 +1,7 @@
 // The "add song" dialog: pick an audio file, confirm title/artist, upload.
 //
 // Mounted into #modal-root (a SIBLING of .app-shell) and built from the same
-// .modal-backdrop / .modal-card parts as playlist-picker.js and the
+// .modal-backdrop / .modal-card parts as song-panel.js and the
 // new-playlist modal, so it dismisses the same way: a press on the dim area,
 // Escape, or the close button, with .app-shell.is-blurred softening
 // everything behind. Both of those - the dismissal and the exit animation -

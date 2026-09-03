@@ -1,9 +1,9 @@
-// Adding and removing songs from the running app.
+// Adding, editing and removing songs from the running app.
 //
-// Both routes sit behind the password gate (index.js mounts requireAuth ahead
-// of this router) and both write through server/storage.js, so everything they
-// create lands on the persistent volume rather than the ephemeral container
-// filesystem.
+// Every route sits behind the password gate (index.js mounts requireAuth ahead
+// of this router) and every one writes through server/storage.js, so everything
+// they create lands on the persistent volume rather than the ephemeral
+// container filesystem.
 
 import express, { Router } from 'express';
 import fsp from 'node:fs/promises';
@@ -26,6 +26,10 @@ const router = Router();
 
 // 80mb covers a long lossless track; anything larger is not a song.
 const UPLOAD_LIMIT = '80mb';
+
+// An edit carries two short strings. The limit is here so a runaway client
+// cannot post a megabyte of JSON at the metadata route.
+const EDIT_LIMIT = '16kb';
 
 // --- serialising library writes ---------------------------------------------
 
@@ -163,6 +167,14 @@ router.post('/tracks', defaultContentType, express.raw({ type: '*/*', limit: UPL
   try {
     const track = await withLibraryLock(async () => {
       const library = await readLibrary();
+      // The id is derived from artist+title at upload time and then frozen -
+      // PATCH /tracks/:id edits the displayed metadata but never re-keys the
+      // track (see that route). So this check is against the ORIGINAL
+      // artist+title, not what the library currently shows: re-uploading a file
+      // whose tags match a track's pre-edit metadata still 409s, because that
+      // id is taken, even though the library now displays something else. Rare,
+      // harmless, and far cheaper than renaming media files and rewriting every
+      // playlist reference on an edit.
       const existing = library.tracks.find((t) => t.id === id);
       if (existing) {
         const conflict = new Error(
@@ -240,6 +252,87 @@ router.use('/tracks', (err, req, res, next) => {
   }
   console.error(`[vempify] upload request failed: ${err?.stack || err?.message || err}`);
   res.status(400).json({ error: 'The upload could not be read.' });
+});
+
+// --- PATCH /api/tracks/:id --------------------------------------------------
+
+// Editing a song's details changes what the library DISPLAYS and nothing else.
+// The id stays exactly as fnv1aId(artist, title) minted it at upload: it names
+// media/<id>.<ext>, media/covers/<id>.<ext> and every reference in
+// playlists.json, so re-keying on an edit would mean renaming files and
+// rewriting playlist rows - real risk, no benefit. After creation the id is an
+// opaque identifier, not a derived value.
+//
+// The parser is mounted on THIS route only, the same way express.raw is scoped
+// to the upload: a body parser registered on the router would swallow the
+// upload's raw audio.
+const editBody = express.json({ limit: EDIT_LIMIT });
+
+// Malformed or oversized JSON is answered here rather than thrown onward. The
+// router's error handler above only sees errors from layers registered before
+// it, and its message ("the upload could not be read") is about a different
+// route anyway.
+function readEditBody(req, res, next) {
+  editBody(req, res, (err) => {
+    if (!err) {
+      next();
+      return;
+    }
+    res.status(400).json({ error: 'The edit could not be read.' });
+  });
+}
+
+// undefined  -> the client did not mention this field; leave it alone.
+// ''         -> the client sent it, but it is empty or all whitespace: a 400.
+// otherwise  -> the trimmed new value.
+function editedField(body, key) {
+  if (!body || typeof body !== 'object') return undefined;
+  if (!Object.prototype.hasOwnProperty.call(body, key)) return undefined;
+  const value = body[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+router.patch('/tracks/:id', readEditBody, async (req, res) => {
+  const { id } = req.params;
+  const title = editedField(req.body, 'title');
+  const artist = editedField(req.body, 'artist');
+
+  if (title === undefined && artist === undefined) {
+    res.status(400).json({ error: 'Send a title, an artist, or both.' });
+    return;
+  }
+  if (title === '' || artist === '') {
+    res.status(400).json({ error: 'Title and artist cannot be empty.' });
+    return;
+  }
+
+  try {
+    // Same lock as the upload and the delete, so an edit cannot read the
+    // library between another mutation's read and its write.
+    const updated = await withLibraryLock(async () => {
+      const library = await readLibrary();
+      const track = library.tracks.find((t) => t.id === id);
+      if (!track) return null;
+
+      // Only these two fields. id, file and cover are deliberately untouched.
+      if (title !== undefined) track.title = title;
+      if (artist !== undefined) track.artist = artist;
+
+      await writeLibraryAtomic(library);
+      return track;
+    });
+
+    if (!updated) {
+      res.status(404).json({ error: 'No such track.' });
+      return;
+    }
+
+    console.log(`[vempify] edited ${updated.id}: "${updated.title}" by ${updated.artist}`);
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error(`[vempify] edit failed: ${err.stack || err.message}`);
+    res.status(500).json({ error: 'Could not save those details.' });
+  }
 });
 
 // --- DELETE /api/tracks/:id -------------------------------------------------
